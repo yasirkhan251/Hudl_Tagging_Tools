@@ -733,7 +733,7 @@ class AutoTaggerApp:
 
         tk.Label(
             btn_frame,
-            text="Keys → Hudl  |  P = Space  |  Q = Exit",
+            text="X = Targets | V = ROI | L = Voice | M = Mode | Q = Exit",
             font=("Segoe UI", 8, "bold"),
             fg="#555555"
         ).pack(
@@ -1049,8 +1049,11 @@ class AutoTaggerApp:
         """
         Global keyboard shortcuts.
 
-        M toggles manual submission mode.
-        Alphabetic keys are forwarded to the previous Hudl window.
+        X = Set Targets
+        V = Set Video ROI
+        L = Speech Tag toggle
+        M = Manual submit mode toggle
+        Other alphabetic keys are forwarded to the previous Hudl window.
         P is special: it sends Space instead of P.
         """
 
@@ -1064,6 +1067,18 @@ class AutoTaggerApp:
             self.toggle_manual_mode()
             return "break"
 
+        if key == "x":
+            self.calibrate_targets()
+            return "break"
+
+        if key == "v":
+            self.calibrate_roi()
+            return "break"
+
+        if key == "l":
+            self.toggle_speech_tag()
+            return "break"
+
         if len(key) == 1 and key.isalpha():
             self.send_hudl_key(key)
             return "break"
@@ -1073,7 +1088,8 @@ class AutoTaggerApp:
         Keep the Manual Tag box numeric-only.
 
         M toggles the mode and is never inserted.
-        Letters, symbols and unsupported keys are ignored.
+        X/V/L trigger calibration or speech controls.
+        Other letters, symbols and unsupported keys are ignored.
         """
 
         key = event.keysym
@@ -1085,6 +1101,18 @@ class AutoTaggerApp:
 
         if key.lower() == "m":
             self.toggle_manual_mode()
+            return "break"
+
+        if key.lower() == "x":
+            self.calibrate_targets()
+            return "break"
+
+        if key.lower() == "v":
+            self.calibrate_roi()
+            return "break"
+
+        if key.lower() == "l":
+            self.toggle_speech_tag()
             return "break"
 
         # Any alphabetic key is an action key, never a jersey number.
