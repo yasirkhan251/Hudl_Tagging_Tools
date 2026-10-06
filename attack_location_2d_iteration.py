@@ -23,12 +23,13 @@ CALIBRATION
 
 You do NOT need to enter screen coordinates.
 
-1. Click "CALIBRATE FOCUS AREA"
-2. Drag a rectangle around the entire Hudl Location area.
-3. The center line is automatically placed at 50%.
-4. Resize/drag again if required.
-5. Press ENTER to confirm.
-6. Press START.
+1. The default Hudl focus area is loaded automatically.
+2. Press START to use the default coordinates.
+3. Click "CALIBRATE / CHANGE FOCUS AREA" if your screen/layout
+   uses different coordinates.
+4. Drag a rectangle around the entire Hudl Location area.
+5. The center line is automatically placed at 50%.
+6. Press ENTER to confirm.
 
 The selected rectangle becomes the coordinate system.
 
@@ -88,6 +89,19 @@ DEFAULT_EDGE_MARGIN = 0.12
 # Minimum distance from the previous point in the SAME half.
 DEFAULT_MIN_POINT_DISTANCE = 30
 
+# Default Hudl focus area.
+#
+# This is the known-good screen area shown in the calibration
+# screenshot. The calibration button can still be used at any
+# time to replace these coordinates.
+DEFAULT_FOCUS_AREA = {
+    "left": 1709,
+    "top": 372,
+    "right": 1808,
+    "bottom": 541,
+    "middle": 456,
+}
+
 # Global emergency hotkey.
 STOP_HOTKEY = "f8"
 
@@ -97,13 +111,10 @@ STOP_HOTKEY = "f8"
 # ============================================================
 
 # Calibration coordinates.
-crop = {
-    "left": None,
-    "top": None,
-    "right": None,
-    "bottom": None,
-    "middle": None,
-}
+#
+# Start with the default Hudl focus area. The user can override
+# it at any time with the calibration tool.
+crop = DEFAULT_FOCUS_AREA.copy()
 
 # Automation state.
 stop_event = threading.Event()
@@ -1005,8 +1016,15 @@ class AttackLocation2DApp:
 
         self.calibration_label = tk.Label(
             self.root,
-            text="FOCUS AREA: NOT CALIBRATED",
-            fg="red",
+            text=(
+                "FOCUS AREA: DEFAULT\n"
+                f"X: {crop['left']} → {crop['right']}\n"
+                f"Y: {crop['top']} → {crop['bottom']}\n"
+                f"CENTER: Y = {crop['middle']}\n"
+                f"SIZE: {crop['right'] - crop['left']} × "
+                f"{crop['bottom'] - crop['top']}px"
+            ),
+            fg="#008000",
             font=(
                 "Segoe UI",
                 11,
@@ -1025,7 +1043,7 @@ class AttackLocation2DApp:
 
         self.calibrate_button = tk.Button(
             self.root,
-            text="1. CALIBRATE FOCUS AREA",
+            text="CALIBRATE / CHANGE FOCUS AREA",
             command=self.start_calibration,
             font=(
                 "Segoe UI",
@@ -1181,8 +1199,9 @@ class AttackLocation2DApp:
 
         self.status_label.config(
             text=(
-                "Drag around the complete Hudl "
-                "Location/Court area."
+                "Default focus area loaded.\n"
+                "Click CALIBRATE / CHANGE FOCUS AREA to select a "
+                "different area."
             )
         )
 
