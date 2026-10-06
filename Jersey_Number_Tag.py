@@ -1125,17 +1125,23 @@ class AutoTaggerApp:
         """
 
         try:
-            # Temporarily remove the dashboard's topmost status so
-            # the T keystroke is not forced into the dashboard.
+            # The dashboard is normally opened over Hudl. Switch to
+            # the previous window, send T there, then return to the
+            # dashboard. This prevents T from entering our own input.
             self.root.attributes("-topmost", False)
             self.root.update_idletasks()
 
+            pyautogui.hotkey("alt", "tab")
+            time.sleep(0.12)
             pyautogui.press("t")
+            time.sleep(0.05)
+            pyautogui.hotkey("alt", "tab")
+            time.sleep(0.12)
 
             self.root.attributes("-topmost", True)
 
             self.status.config(
-                text="T key sent.",
+                text="T key sent to the previous window.",
                 fg="#007700"
             )
 
