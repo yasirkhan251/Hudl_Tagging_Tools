@@ -43,6 +43,11 @@ MODEL_PATH = Path(__file__).resolve().parent / "vosk"
 
 SAMPLE_RATE = 16000
 
+# Manual jersey-number auto-submit delay.
+# Every digit typed resets this timer, so values such as 21 or 32
+# can be entered naturally before the tag is submitted.
+MANUAL_AUTO_SUBMIT_DELAY_MS = 1700
+
 
 # ============================================================
 # SPOKEN NUMBER WORDS
@@ -597,6 +602,15 @@ class AutoTaggerApp:
         self.voice_thread = None
 
         # ----------------------------------------------------
+        # MANUAL TAG MODE
+        # ----------------------------------------------------
+
+        # "auto"   = submit automatically after a short pause
+        # "enter"  = wait for Enter before submitting
+        self.manual_mode = "auto"
+        self.manual_submit_job = None
+
+        # ----------------------------------------------------
         # MODELS
         # ----------------------------------------------------
 
@@ -619,6 +633,13 @@ class AutoTaggerApp:
         # ----------------------------------------------------
 
         self._build_ui()
+
+        # M toggles manual submission mode anywhere in this window.
+        self.root.bind_all(
+            "<KeyPress>",
+            self._global_key_handler,
+            add="+"
+        )
 
         self.root.protocol(
             "WM_DELETE_WINDOW",
@@ -691,6 +712,22 @@ class AutoTaggerApp:
         )
 
         # ----------------------------------------------------
+        # MANUAL MODE BUTTON
+        # ----------------------------------------------------
+
+        self.manual_mode_btn = tk.Button(
+            btn_frame,
+            text="M: Auto Submit",
+            width=14,
+            command=self.toggle_manual_mode
+        )
+
+        self.manual_mode_btn.pack(
+            side="left",
+            padx=(0, 6)
+        )
+
+        # ----------------------------------------------------
         # BUTTON 3
         # ----------------------------------------------------
 
@@ -748,6 +785,11 @@ class AutoTaggerApp:
         self.entry.bind(
             "<Return>",
             self.manual_submit
+        )
+
+        self.entry.bind(
+            "<KeyRelease>",
+            self._manual_key_released
         )
 
         tk.Button(
@@ -948,6 +990,153 @@ class AutoTaggerApp:
             )
 
     # ========================================================
+    # MANUAL TAG MODE
+    # ========================================================
+
+    def _global_key_handler(self, event):
+        """Toggle manual submission mode with the M key."""
+
+        if event.keysym.lower() == "m":
+            self.toggle_manual_mode()
+            return "break"
+
+    def toggle_manual_mode(self):
+        """
+        Switch between:
+
+            AUTO SUBMIT -> wait 1.7s after the last digit
+            ENTER SUBMIT -> wait for Enter
+
+        The timer is reset every time another digit is entered.
+        """
+
+        if self.manual_mode == "auto":
+            self.manual_mode = "enter"
+
+            self._cancel_manual_submit_timer()
+
+            self.manual_mode_btn.config(
+                text="M: Enter Submit",
+                bg="#0055cc",
+                fg="white"
+            )
+
+            self.status.config(
+                text=(
+                    "Manual mode: ENTER SUBMIT. "
+                    "Type a jersey number and press Enter."
+                ),
+                fg="black"
+            )
+
+        else:
+            self.manual_mode = "auto"
+
+            self.manual_mode_btn.config(
+                text="M: Auto Submit",
+                bg="#008000",
+                fg="white"
+            )
+
+            self.status.config(
+                text=(
+                    "Manual mode: AUTO SUBMIT. "
+                    f"Waiting {MANUAL_AUTO_SUBMIT_DELAY_MS / 1000:.1f}s "
+                    "after the last digit."
+                ),
+                fg="black"
+            )
+
+            # If a valid number is already in the box, start its timer.
+            self._schedule_manual_submit()
+
+        self.entry.focus_set()
+
+    def _cancel_manual_submit_timer(self):
+        """Cancel the currently scheduled manual auto-submit."""
+
+        if self.manual_submit_job is not None:
+            try:
+                self.root.after_cancel(self.manual_submit_job)
+            except (tk.TclError, ValueError):
+                pass
+
+            self.manual_submit_job = None
+
+    def _manual_key_released(self, event=None):
+        """
+        In auto mode, reset the debounce timer after every key release.
+
+        Example:
+            2 -> wait 1.7s
+            21 -> timer resets to 1.7s
+
+        Therefore 21 is submitted as one jersey number instead of
+        submitting 2 immediately.
+        """
+
+        if self.manual_mode != "auto":
+            return
+
+        self._schedule_manual_submit()
+
+    def _schedule_manual_submit(self):
+        """Schedule auto-submit for the current valid jersey number."""
+
+        self._cancel_manual_submit_timer()
+
+        raw = (
+            self.entry
+            .get()
+            .strip()
+            .lstrip("#")
+            .strip()
+        )
+
+        if (
+            not re.fullmatch(r"\\d{1,2}", raw)
+            or
+            not 1 <= int(raw) <= 99
+        ):
+            return
+
+        self.manual_submit_job = self.root.after(
+            MANUAL_AUTO_SUBMIT_DELAY_MS,
+            lambda value=raw: self._auto_submit_manual(value)
+        )
+
+        self.status.config(
+            text=(
+                f"Waiting {MANUAL_AUTO_SUBMIT_DELAY_MS / 1000:.1f}s "
+                f"to auto-submit #{raw}..."
+            ),
+            fg="#555555"
+        )
+
+    def _auto_submit_manual(self, expected_value):
+        """Submit only if the entry is unchanged when the timer expires."""
+
+        self.manual_submit_job = None
+
+        if self.manual_mode != "auto":
+            return
+
+        current = (
+            self.entry
+            .get()
+            .strip()
+            .lstrip("#")
+            .strip()
+        )
+
+        if current != expected_value:
+            # A newer digit/key change won the race; schedule again.
+            self._schedule_manual_submit()
+            return
+
+        self.manual_submit()
+
+    # ========================================================
     # MANUAL TAG
     # ========================================================
 
@@ -955,6 +1144,9 @@ class AutoTaggerApp:
         self,
         event=None
     ):
+
+        # Manual submission always cancels any pending auto-submit.
+        self._cancel_manual_submit_timer()
 
         if (
             not self.jersey_coords
@@ -1964,6 +2156,8 @@ class AutoTaggerApp:
     # ========================================================
 
     def close(self):
+
+        self._cancel_manual_submit_timer()
 
         self.is_scanning = False
 
