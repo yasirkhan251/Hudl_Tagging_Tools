@@ -2379,6 +2379,7 @@ def move_to_monitor_2(root):
                     info.rcWork.top,
                     info.rcWork.right,
                     info.rcWork.bottom,
+                    bool(info.dwFlags & 1),  # MONITORINFOF_PRIMARY
                 ))
             return 1
 
@@ -2386,8 +2387,21 @@ def move_to_monitor_2(root):
         user32.EnumDisplayMonitors(None, None, callback, 0)
 
         if len(monitors) >= 2:
-            left, top, right, bottom = monitors[1]
-            root.geometry(f"480x370+{left + 20}+{top + 20}")
+            # Do not rely on EnumDisplayMonitors() list order.
+            # Prefer the monitor that Windows marks as non-primary.
+            non_primary = [
+                monitor for monitor in monitors
+                if not monitor[4]
+            ]
+
+            if non_primary:
+                left, top, right, bottom, _ = non_primary[0]
+            else:
+                left, top, right, bottom, _ = monitors[1]
+
+            root.geometry(
+                f"480x370+{left + 20}+{top + 20}"
+            )
             return
 
     except Exception:
