@@ -787,6 +787,12 @@ class AutoTaggerApp:
             self.manual_submit
         )
 
+        # Keep the Manual Tag field numeric-only.
+        self.entry.bind(
+            "<KeyPress>",
+            self._manual_key_pressed
+        )
+
         self.entry.bind(
             "<KeyRelease>",
             self._manual_key_released
@@ -994,11 +1000,66 @@ class AutoTaggerApp:
     # ========================================================
 
     def _global_key_handler(self, event):
-        """Toggle manual submission mode with the M key."""
+        """Toggle manual submission mode with M outside the input box."""
 
-        if event.keysym.lower() == "m":
+        if (
+            event.keysym.lower() == "m"
+            and
+            self.root.focus_get() is not self.entry
+        ):
             self.toggle_manual_mode()
             return "break"
+
+    def _manual_key_pressed(self, event):
+        """
+        Keep the Manual Tag box numeric-only.
+
+        M toggles the mode and is never inserted.
+        Letters, symbols and unsupported keys are ignored.
+        """
+
+        key = event.keysym
+
+        # M is a control key, never a jersey-number character.
+        if key.lower() == "m":
+            self.toggle_manual_mode()
+            return "break"
+
+        # Normal editing/navigation keys.
+        if key in {
+            "BackSpace",
+            "Delete",
+            "Left",
+            "Right",
+            "Home",
+            "End",
+            "Return",
+            "KP_Enter",
+            "Tab",
+        }:
+            return None
+
+        # Only digits are allowed.
+        if key not in "0123456789":
+            return "break"
+
+        # Check the value that would result from this digit.
+        current = self.entry.get()
+
+        if self.entry.selection_present():
+            start = self.entry.index(tk.SEL_FIRST)
+            end = self.entry.index(tk.SEL_LAST)
+        else:
+            start = self.entry.index(tk.INSERT)
+            end = start
+
+        proposed = current[:start] + key + current[end:]
+
+        # Maximum two digits.
+        if len(proposed) > 2:
+            return "break"
+
+        return None
 
     def toggle_manual_mode(self):
         """
@@ -1094,7 +1155,7 @@ class AutoTaggerApp:
         )
 
         if (
-            not re.fullmatch(r"\\d{1,2}", raw)
+            not re.fullmatch(r"\d{1,2}", raw)
             or
             not 1 <= int(raw) <= 99
         ):
