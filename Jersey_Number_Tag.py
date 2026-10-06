@@ -728,6 +728,22 @@ class AutoTaggerApp:
         )
 
         # ----------------------------------------------------
+        # T KEY ACTION
+        # ----------------------------------------------------
+
+        self.t_key_btn = tk.Button(
+            btn_frame,
+            text="T: Send T",
+            width=12,
+            command=self.send_t_key
+        )
+
+        self.t_key_btn.pack(
+            side="left",
+            padx=(0, 6)
+        )
+
+        # ----------------------------------------------------
         # BUTTON 3
         # ----------------------------------------------------
 
@@ -1036,10 +1052,12 @@ class AutoTaggerApp:
 
         if (
             event.keysym.lower() == "m"
-            and
-            self.root.focus_get() is not self.entry
         ):
             self.toggle_manual_mode()
+            return "break"
+
+        if event.keysym.lower() == "t":
+            self.send_t_key()
             return "break"
 
     def _manual_key_pressed(self, event):
@@ -1055,6 +1073,11 @@ class AutoTaggerApp:
         # M is a control key, never a jersey-number character.
         if key.lower() == "m":
             self.toggle_manual_mode()
+            return "break"
+
+        # T is an action key, never a jersey-number character.
+        if key.lower() == "t":
+            self.send_t_key()
             return "break"
 
         # Normal editing/navigation keys.
@@ -1092,6 +1115,40 @@ class AutoTaggerApp:
             return "break"
 
         return None
+
+    def send_t_key(self):
+        """
+        Send the T key to the currently focused application.
+
+        T is an action shortcut, so it is never inserted into
+        the Manual Tag input.
+        """
+
+        try:
+            # Temporarily remove the dashboard's topmost status so
+            # the T keystroke is not forced into the dashboard.
+            self.root.attributes("-topmost", False)
+            self.root.update_idletasks()
+
+            pyautogui.press("t")
+
+            self.root.attributes("-topmost", True)
+
+            self.status.config(
+                text="T key sent.",
+                fg="#007700"
+            )
+
+        except Exception as exc:
+            try:
+                self.root.attributes("-topmost", True)
+            except Exception:
+                pass
+
+            self.status.config(
+                text=f"T key error: {exc}",
+                fg="#b30000"
+            )
 
     def toggle_manual_mode(self):
         """
