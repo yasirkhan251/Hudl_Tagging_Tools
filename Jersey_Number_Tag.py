@@ -133,7 +133,7 @@ def parse_spoken_number(text):
         "thirty five"    -> "35"
 
     Valid range:
-        1 - 99
+        0 - 99
     """
 
     text = text.lower().strip()
@@ -143,7 +143,7 @@ def parse_spoken_number(text):
     # --------------------------------------------------------
 
     digit = re.search(
-        r"\b([1-9]\d?)\b",
+        r"\b(\d{1,2})\b",
         text
     )
 
@@ -153,7 +153,7 @@ def parse_spoken_number(text):
             digit.group(1)
         )
 
-        if 1 <= value <= 99:
+        if 0 <= value <= 99:
             return str(value)
 
         return None
@@ -733,7 +733,7 @@ class AutoTaggerApp:
 
         tk.Label(
             btn_frame,
-            text="Keys → Hudl  |  P = Space",
+            text="Keys → Hudl  |  P = Space  |  Q = Exit",
             font=("Segoe UI", 8, "bold"),
             fg="#555555"
         ).pack(
@@ -1043,7 +1043,7 @@ class AutoTaggerApp:
         if not re.fullmatch(r"[1-9]\d{0,1}", proposed):
             return False
 
-        return 1 <= int(proposed) <= 99
+        return 0 <= int(proposed) <= 99
 
     def _global_key_handler(self, event):
         """
@@ -1055,6 +1055,10 @@ class AutoTaggerApp:
         """
 
         key = event.keysym.lower()
+
+        if key == "q":
+            self.close()
+            return "break"
 
         if key == "m":
             self.toggle_manual_mode()
@@ -1075,6 +1079,10 @@ class AutoTaggerApp:
         key = event.keysym
 
         # M is a control key, never a jersey-number character.
+        if key.lower() == "q":
+            self.close()
+            return "break"
+
         if key.lower() == "m":
             self.toggle_manual_mode()
             return "break"
@@ -1262,7 +1270,7 @@ class AutoTaggerApp:
         if (
             not re.fullmatch(r"\d{1,2}", raw)
             or
-            not 1 <= int(raw) <= 99
+            not 0 <= int(raw) <= 99
         ):
             return
 
@@ -1350,7 +1358,7 @@ class AutoTaggerApp:
             self.status.config(
                 text=(
                     "Enter a jersey number "
-                    "from 1 to 99."
+                    "from 0 to 99."
                 ),
                 fg="#b30000"
             )
@@ -1832,7 +1840,7 @@ class AutoTaggerApp:
                                         clean
                                     )
                                     and
-                                    1 <= int(clean) <= 99
+                                    0 <= int(clean) <= 99
                                     and
                                     prob > 0.35
                                 ):
@@ -1959,7 +1967,7 @@ class AutoTaggerApp:
                 lambda: self.timer_label.config(
                     text=(
                         "Speech listening: "
-                        "say a number (1-99)"
+                        "say a number (0-99)"
                     ),
                     fg="#cc6600"
                 )
@@ -2333,12 +2341,70 @@ class AutoTaggerApp:
 
 
 # ============================================================
+# START ON MONITOR 2
+# ============================================================
+
+def move_to_monitor_2(root):
+    """Place the main window on Windows monitor 2 when available."""
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        monitors = []
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("rcMonitor", wintypes.RECT),
+                ("rcWork", wintypes.RECT),
+                ("dwFlags", wintypes.DWORD),
+            ]
+
+        MONITORENUMPROC = ctypes.WINFUNCTYPE(
+            ctypes.c_int,
+            wintypes.HMONITOR,
+            wintypes.HDC,
+            ctypes.POINTER(wintypes.RECT),
+            wintypes.LPARAM,
+        )
+
+        def enum_callback(hmonitor, hdc, rect, lparam):
+            info = MONITORINFO()
+            info.cbSize = ctypes.sizeof(MONITORINFO)
+            if user32.GetMonitorInfoW(hmonitor, ctypes.byref(info)):
+                monitors.append((
+                    info.rcWork.left,
+                    info.rcWork.top,
+                    info.rcWork.right,
+                    info.rcWork.bottom,
+                ))
+            return 1
+
+        callback = MONITORENUMPROC(enum_callback)
+        user32.EnumDisplayMonitors(None, None, callback, 0)
+
+        if len(monitors) >= 2:
+            left, top, right, bottom = monitors[1]
+            root.geometry(f"480x370+{left + 20}+{top + 20}")
+            return
+
+    except Exception:
+        pass
+
+    root.geometry("480x370+40+80")
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
 def main():
 
     root = tk.Tk()
+
+    move_to_monitor_2(root)
 
     AutoTaggerApp(
         root
