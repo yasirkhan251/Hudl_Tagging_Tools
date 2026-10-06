@@ -1030,17 +1030,17 @@ class AutoTaggerApp:
 
         Only a valid jersey-number prefix is accepted:
             ""   -> allowed while editing
-            1-9  -> allowed
-            10-99 -> allowed
+            0-9  -> allowed
+            00-99 -> allowed
 
-        Letters, symbols, pasted text, 0, and values above 99
+        Letters, symbols, and values above 99
         are rejected before they enter the field.
         """
 
         if proposed == "":
             return True
 
-        if not re.fullmatch(r"[1-9]\d{0,1}", proposed):
+        if not re.fullmatch(r"\d{1,2}", proposed):
             return False
 
         return 0 <= int(proposed) <= 99
