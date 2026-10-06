@@ -46,7 +46,7 @@ SAMPLE_RATE = 16000
 # Manual jersey-number auto-submit delay.
 # Every digit typed resets this timer, so values such as 21 or 32
 # can be entered naturally before the tag is submitted.
-MANUAL_AUTO_SUBMIT_DELAY_MS = 1700
+MANUAL_AUTO_SUBMIT_DELAY_MS = 1200
 
 
 # ============================================================
@@ -1170,7 +1170,7 @@ class AutoTaggerApp:
         """
         Switch between:
 
-            AUTO SUBMIT -> wait 1.7s after the last digit
+            AUTO SUBMIT -> wait 1.2s after the last digit
             ENTER SUBMIT -> wait for Enter
 
         The timer is reset every time another digit is entered.
