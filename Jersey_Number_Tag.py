@@ -728,19 +728,17 @@ class AutoTaggerApp:
         )
 
         # ----------------------------------------------------
-        # T KEY ACTION
+        # KEYBOARD ACTION MODE
         # ----------------------------------------------------
 
-        self.t_key_btn = tk.Button(
+        tk.Label(
             btn_frame,
-            text="T: Send T",
-            width=12,
-            command=self.send_t_key
-        )
-
-        self.t_key_btn.pack(
+            text="Keys → Hudl  |  P = Space",
+            font=("Segoe UI", 8, "bold"),
+            fg="#555555"
+        ).pack(
             side="left",
-            padx=(0, 6)
+            padx=(2, 0)
         )
 
         # ----------------------------------------------------
@@ -1048,16 +1046,22 @@ class AutoTaggerApp:
         return 1 <= int(proposed) <= 99
 
     def _global_key_handler(self, event):
-        """Toggle manual submission mode with M outside the input box."""
+        """
+        Global keyboard shortcuts.
 
-        if (
-            event.keysym.lower() == "m"
-        ):
+        M toggles manual submission mode.
+        Alphabetic keys are forwarded to the previous Hudl window.
+        P is special: it sends Space instead of P.
+        """
+
+        key = event.keysym.lower()
+
+        if key == "m":
             self.toggle_manual_mode()
             return "break"
 
-        if event.keysym.lower() == "t":
-            self.send_t_key()
+        if len(key) == 1 and key.isalpha():
+            self.send_hudl_key(key)
             return "break"
 
     def _manual_key_pressed(self, event):
@@ -1075,9 +1079,10 @@ class AutoTaggerApp:
             self.toggle_manual_mode()
             return "break"
 
-        # T is an action key, never a jersey-number character.
-        if key.lower() == "t":
-            self.send_t_key()
+        # Any alphabetic key is an action key, never a jersey number.
+        # P sends Space; every other letter sends itself.
+        if len(key) == 1 and key.isalpha():
+            self.send_hudl_key(key)
             return "break"
 
         # Normal editing/navigation keys.
@@ -1116,32 +1121,37 @@ class AutoTaggerApp:
 
         return None
 
-    def send_t_key(self):
+    def send_hudl_key(self, key):
         """
-        Send the T key to the currently focused application.
+        Send a keyboard action to the previous Hudl window.
 
-        T is an action shortcut, so it is never inserted into
-        the Manual Tag input.
+        M is handled separately as the manual-mode toggle.
+        P is mapped to Space. Every other alphabetic key is
+        sent unchanged.
         """
+
+        output_key = "space" if key.lower() == "p" else key.lower()
 
         try:
-            # The dashboard is normally opened over Hudl. Switch to
-            # the previous window, send T there, then return to the
-            # dashboard. This prevents T from entering our own input.
+            # The dashboard is normally over Hudl. Temporarily step
+            # out of the way, switch to the previous window, send the
+            # requested key, then return to the dashboard.
             self.root.attributes("-topmost", False)
             self.root.update_idletasks()
 
             pyautogui.hotkey("alt", "tab")
             time.sleep(0.12)
-            pyautogui.press("t")
+            pyautogui.press(output_key)
             time.sleep(0.05)
             pyautogui.hotkey("alt", "tab")
             time.sleep(0.12)
 
             self.root.attributes("-topmost", True)
 
+            display = "SPACE" if output_key == "space" else output_key.upper()
+
             self.status.config(
-                text="T key sent to the previous window.",
+                text=f"Sent {display} key to the previous window.",
                 fg="#007700"
             )
 
@@ -1152,7 +1162,7 @@ class AutoTaggerApp:
                 pass
 
             self.status.config(
-                text=f"T key error: {exc}",
+                text=f"Key action error: {exc}",
                 fg="#b30000"
             )
 
