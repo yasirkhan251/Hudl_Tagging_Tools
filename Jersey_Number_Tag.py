@@ -782,6 +782,17 @@ class AutoTaggerApp:
             padx=8
         )
 
+        # Tk validation also blocks pasted letters/symbols.
+        validate_cmd = (
+            self.root.register(self._validate_manual_input),
+            "%P"
+        )
+
+        self.entry.configure(
+            validate="key",
+            validatecommand=validate_cmd
+        )
+
         self.entry.bind(
             "<Return>",
             self.manual_submit
@@ -998,6 +1009,27 @@ class AutoTaggerApp:
     # ========================================================
     # MANUAL TAG MODE
     # ========================================================
+
+    def _validate_manual_input(self, proposed):
+        """
+        Final safety filter for the Manual Tag field.
+
+        Only a valid jersey-number prefix is accepted:
+            ""   -> allowed while editing
+            1-9  -> allowed
+            10-99 -> allowed
+
+        Letters, symbols, pasted text, 0, and values above 99
+        are rejected before they enter the field.
+        """
+
+        if proposed == "":
+            return True
+
+        if not re.fullmatch(r"[1-9]\d{0,1}", proposed):
+            return False
+
+        return 1 <= int(proposed) <= 99
 
     def _global_key_handler(self, event):
         """Toggle manual submission mode with M outside the input box."""
