@@ -248,7 +248,6 @@ class CalibrationOverlay:
         self.start_y = None
 
         self.rect_id = None
-
         self.first_coords = None
 
         # ----------------------------------------------------
@@ -498,7 +497,6 @@ class CalibrationOverlay:
             and
             y2 - y1 > 50
         ):
-
             self.callback(
                 {
                     "top": y1,
@@ -747,8 +745,7 @@ class AutoTaggerApp:
 
         self.speech_btn = tk.Button(
             btn_frame,
-            text="3. Speech Tag",
-            width=14,
+            text="3. Speech Tag",            width=14,
             command=self.toggle_speech_tag
         )
 
@@ -997,8 +994,7 @@ class AutoTaggerApp:
     # ROI COMPLETE
     # ========================================================
 
-    def _on_roi_done(
-        self,
+    def _on_roi_done(        self,
         roi
     ):
 
@@ -1049,12 +1045,15 @@ class AutoTaggerApp:
         """
         Global keyboard shortcuts.
 
+        J = Hudl Left Arrow (5 seconds backward)
+        L = Hudl Right Arrow (5 seconds forward)
+        K = Hudl Space (play/pause)
+        P = Hudl Space (play/pause)
         X = Set Targets
         V = Set Video ROI
-        L = Speech Tag toggle
         M = Manual submit mode toggle
+        Q = Exit
         Other alphabetic keys are forwarded to the previous Hudl window.
-        P is special: it sends Space instead of P.
         """
 
         key = event.keysym.lower()
@@ -1075,8 +1074,10 @@ class AutoTaggerApp:
             self.calibrate_roi()
             return "break"
 
-        if key == "l":
-            self.toggle_speech_tag()
+        # Direct Hudl media controls. These keys never enter the
+        # Manual Tag input field.
+        if key in {"j", "l", "k", "p"}:
+            self.send_hudl_key(key)
             return "break"
 
         if len(key) == 1 and key.isalpha():
@@ -1088,13 +1089,13 @@ class AutoTaggerApp:
         Keep the Manual Tag box numeric-only.
 
         M toggles the mode and is never inserted.
-        X/V/L trigger calibration or speech controls.
-        Other letters, symbols and unsupported keys are ignored.
+        X/V trigger calibration controls.
+        J = Left Arrow, L = Right Arrow, K/P = Space.
+        Other letters are forwarded to Hudl instead of entering the box.
         """
 
         key = event.keysym
 
-        # M is a control key, never a jersey-number character.
         if key.lower() == "q":
             self.close()
             return "break"
@@ -1111,14 +1112,14 @@ class AutoTaggerApp:
             self.calibrate_roi()
             return "break"
 
-        if key.lower() == "l":
-            self.toggle_speech_tag()
+        # Direct media controls.
+        if key.lower() in {"j", "l", "k", "p"}:
+            self.send_hudl_key(key.lower())
             return "break"
 
         # Any alphabetic key is an action key, never a jersey number.
-        # P sends Space; every other letter sends itself.
         if len(key) == 1 and key.isalpha():
-            self.send_hudl_key(key)
+            self.send_hudl_key(key.lower())
             return "break"
 
         # Normal editing/navigation keys.
@@ -1139,7 +1140,6 @@ class AutoTaggerApp:
         if key not in "0123456789":
             return "break"
 
-        # Check the value that would result from this digit.
         current = self.entry.get()
 
         if self.entry.selection_present():
@@ -1151,7 +1151,6 @@ class AutoTaggerApp:
 
         proposed = current[:start] + key + current[end:]
 
-        # Maximum two digits.
         if len(proposed) > 2:
             return "break"
 
@@ -1161,12 +1160,25 @@ class AutoTaggerApp:
         """
         Send a keyboard action to the previous Hudl window.
 
-        M is handled separately as the manual-mode toggle.
-        P is mapped to Space. Every other alphabetic key is
-        sent unchanged.
+        Media shortcuts:
+            J -> Left Arrow
+            L -> Right Arrow
+            K -> Space
+            P -> Space
+
+        Every other alphabetic key is sent unchanged.
         """
 
-        output_key = "space" if key.lower() == "p" else key.lower()
+        key = key.lower()
+
+        action_map = {
+            "j": "left",
+            "l": "right",
+            "k": "space",
+            "p": "space",
+        }
+
+        output_key = action_map.get(key, key)
 
         try:
             # The dashboard is normally over Hudl. Temporarily step
@@ -1184,10 +1196,19 @@ class AutoTaggerApp:
 
             self.root.attributes("-topmost", True)
 
-            display = "SPACE" if output_key == "space" else output_key.upper()
+            display_names = {
+                "left": "LEFT ARROW (5 sec back)",
+                "right": "RIGHT ARROW (5 sec forward)",
+                "space": "SPACE (play/pause)",
+            }
+
+            display = display_names.get(
+                output_key,
+                output_key.upper()
+            )
 
             self.status.config(
-                text=f"Sent {display} key to the previous window.",
+                text=f"Sent {display} to the previous Hudl window.",
                 fg="#007700"
             )
 
@@ -1248,7 +1269,6 @@ class AutoTaggerApp:
                 ),
                 fg="black"
             )
-
             # If a valid number is already in the box, start its timer.
             self._schedule_manual_submit()
 
@@ -1497,7 +1517,6 @@ class AutoTaggerApp:
     def _start_speech_tag_worker(self):
 
         try:
-
             if self.vosk_model is None:
 
                 if not MODEL_PATH.is_dir():
@@ -1747,8 +1766,7 @@ class AutoTaggerApp:
 
                         continue
 
-                    frame = np.array(
-                        sct.grab(
+                    frame = np.array(                        sct.grab(
                             self.video_roi
                         )
                     )
@@ -1997,8 +2015,7 @@ class AutoTaggerApp:
                         "Speech listening: "
                         "say a number (0-99)"
                     ),
-                    fg="#cc6600"
-                )
+                    fg="#cc6600"                )
             )
 
             # ------------------------------------------------
@@ -2247,8 +2264,7 @@ class AutoTaggerApp:
             )
 
             time.sleep(
-                0.15
-            )
+                0.15            )
 
             # =================================================
             # STEP 4
