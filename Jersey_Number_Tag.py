@@ -46,7 +46,7 @@ SAMPLE_RATE = 16000
 # Manual jersey-number auto-submit delay.
 # Every digit typed resets this timer, so values such as 21 or 32
 # can be entered naturally before the tag is submitted.
-MANUAL_AUTO_SUBMIT_DELAY_MS = 1200
+MANUAL_AUTO_SUBMIT_DELAY_MS = 600
 
 
 # ============================================================
