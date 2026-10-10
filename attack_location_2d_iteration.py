@@ -1,99 +1,40 @@
 """
 ============================================================
-HUDL ATTACK LOCATION 2D - RANDOM ITERATION TAGGER
+HUDL ATTACK LOCATION 2D - MODERN DASHBOARD EDITION
 ============================================================
 
 WORKFLOW:
+    TOP -> BOTTOM -> E  OR  BOTTOM -> TOP -> E
 
-    TOP    -> BOTTOM -> E
-    OR
-    BOTTOM -> TOP -> E
-
-Example:
-
-    1. TOP    -> BOTTOM -> E
-    2. BOTTOM -> TOP    -> E
-    3. TOP    -> BOTTOM -> E
-    4. TOP    -> BOTTOM -> E
-    5. BOTTOM -> TOP    -> E
-
-------------------------------------------------------------
-CALIBRATION
-------------------------------------------------------------
-
-You do NOT need to enter screen coordinates.
-
-1. The default Hudl focus area is loaded automatically.
-2. Press START to use the default coordinates.
-3. Click "CALIBRATE / CHANGE FOCUS AREA" if your screen/layout
-   uses different coordinates.
-4. Drag a rectangle around the entire Hudl Location area.
-5. The center line is automatically placed at 50%.
-6. Press ENTER to confirm.
-
-The selected rectangle becomes the coordinate system.
-
-The center line is always:
-
-    center_y = crop_top + crop_height / 2
-
-Therefore it remains exactly centered regardless of crop size.
-
-------------------------------------------------------------
-HOTKEYS
-------------------------------------------------------------
-
-F8     = Emergency stop
-ESC    = Cancel calibration
-ENTER  = Confirm calibration
-
-------------------------------------------------------------
-DEPENDENCIES
-------------------------------------------------------------
-
-pip install pyautogui keyboard
-
+HOTKEYS:
+    I  = Focus & type iterations (Numbers ONLY)
+    E  = Start iterations immediately (No letters inserted!)
+    S  = Stop iteration
+    X  = Exit application
+    F8 = Global emergency stop
 ============================================================
 """
 
+import json
+import os
 import random
 import threading
 import time
 import tkinter as tk
 from tkinter import messagebox
-
 import pyautogui
 
-
 # ============================================================
-# GLOBAL SETTINGS
+# GLOBAL SETTINGS & FILE PATHS
 # ============================================================
 
-# Minimum time between first and second click.
-# Lower = faster.
+GLOBAL_CONFIG_FILE = "hudl_global_config.json"
+
 DEFAULT_CLICK_DELAY = 0.035
-
-# Time after pressing E before next iteration.
-# Increase this if Hudl needs more time.
 DEFAULT_SET_DELAY = 0.08
-
-# Percentage of each half kept away from the outer edge.
-#
-# 0.10 = 10% margin
-# 0.15 = 15% margin
-#
-# This prevents points from being generated directly
-# against the border.
 DEFAULT_EDGE_MARGIN = 0.12
-
-# Minimum distance from the previous point in the SAME half.
 DEFAULT_MIN_POINT_DISTANCE = 30
 
-# Default Hudl focus area.
-#
-# This is the known-good screen area shown in the calibration
-# screenshot. The calibration button can still be used at any
-# time to replace these coordinates.
 DEFAULT_FOCUS_AREA = {
     "left": 1709,
     "top": 372,
@@ -102,83 +43,53 @@ DEFAULT_FOCUS_AREA = {
     "middle": 456,
 }
 
-# Global emergency hotkey.
 STOP_HOTKEY = "f8"
 
-
 # ============================================================
-# GLOBAL STATE
+# CONFIGURATION HELPERS
 # ============================================================
 
-# Calibration coordinates.
-#
-# Start with the default Hudl focus area. The user can override
-# it at any time with the calibration tool.
-crop = DEFAULT_FOCUS_AREA.copy()
+def load_global_config():
+    if os.path.exists(GLOBAL_CONFIG_FILE):
+        try:
+            with open(GLOBAL_CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[Config] Error loading: {e}")
+    return {}
 
-# Automation state.
+def save_global_config(config_data):
+    try:
+        with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=4)
+    except Exception as e:
+        print(f"[Config] Save error: {e}")
+
+_initial_cfg = load_global_config()
+crop = _initial_cfg.get("attack_2d", {}).get("focus_area", DEFAULT_FOCUS_AREA.copy())
+
 stop_event = threading.Event()
-
 automation_running = False
-
-# Last generated points.
 last_top_point = None
 last_bottom_point = None
 
-
 # ============================================================
-# HELPER FUNCTIONS
+# RANDOM POINT GENERATION
 # ============================================================
 
 def is_calibrated():
-    """
-    Check whether the focus area has been calibrated.
-    """
-
-    required = [
-        "left",
-        "top",
-        "right",
-        "bottom",
-        "middle",
-    ]
-
-    return all(
-        crop[key] is not None
-        for key in required
-    )
-
+    required = ["left", "top", "right", "bottom", "middle"]
+    return all(crop.get(key) is not None for key in required)
 
 def point_distance(point_a, point_b):
-    """
-    Calculate distance between two screen points.
-    """
-
     if point_a is None or point_b is None:
         return float("inf")
-
     dx = point_a[0] - point_b[0]
     dy = point_a[1] - point_b[1]
-
     return (dx * dx + dy * dy) ** 0.5
 
-
-def generate_random_point(
-    half,
-    edge_margin,
-    minimum_distance,
-):
-    """
-    Generate a random screen coordinate inside either:
-
-        half = "top"
-        half = "bottom"
-
-    The point is generated directly in screen coordinates.
-    """
-
-    global last_top_point
-    global last_bottom_point
+def generate_random_point(half, edge_margin, minimum_distance):
+    global last_top_point, last_bottom_point
 
     left = crop["left"]
     right = crop["right"]
@@ -186,27 +97,14 @@ def generate_random_point(
     middle = crop["middle"]
     bottom = crop["bottom"]
 
-    # --------------------------------------------------------
-    # Select half
-    # --------------------------------------------------------
-
     if half == "top":
-
         half_top = top
         half_bottom = middle
-
         previous_point = last_top_point
-
     else:
-
         half_top = middle
         half_bottom = bottom
-
         previous_point = last_bottom_point
-
-    # --------------------------------------------------------
-    # Calculate margins
-    # --------------------------------------------------------
 
     width = right - left
     height = half_bottom - half_top
@@ -216,1579 +114,503 @@ def generate_random_point(
 
     min_x = int(left + x_margin)
     max_x = int(right - x_margin)
-
     min_y = int(half_top + y_margin)
     max_y = int(half_bottom - y_margin)
 
-    # Safety check.
     if min_x >= max_x:
-        min_x = left
-        max_x = right
-
+        min_x, max_x = left, right
     if min_y >= max_y:
-        min_y = half_top
-        max_y = half_bottom
-
-    # --------------------------------------------------------
-    # Try many random points
-    # --------------------------------------------------------
+        min_y, max_y = half_top, half_bottom
 
     for _ in range(1000):
-
-        x = random.randint(
-            min_x,
-            max_x
-        )
-
-        y = random.randint(
-            min_y,
-            max_y
-        )
-
-        point = (x, y)
-
-        if point_distance(
-            point,
-            previous_point
-        ) >= minimum_distance:
-
+        point = (random.randint(min_x, max_x), random.randint(min_y, max_y))
+        if point_distance(point, previous_point) >= minimum_distance:
             return point
 
-    # --------------------------------------------------------
-    # Fallback
-    # --------------------------------------------------------
+    return (random.randint(min_x, max_x), random.randint(min_y, max_y))
 
-    return (
-        random.randint(
-            min_x,
-            max_x
-        ),
-        random.randint(
-            min_y,
-            max_y
-        ),
-    )
-
-
-def remember_point(
-    half,
-    point
-):
-    """
-    Store the most recently generated point
-    for the corresponding half.
-    """
-
-    global last_top_point
-    global last_bottom_point
-
+def remember_point(half, point):
+    global last_top_point, last_bottom_point
     if half == "top":
         last_top_point = point
     else:
         last_bottom_point = point
 
-
 # ============================================================
-# FOCUS AREA CALIBRATOR
+# CALIBRATION OVERLAY
 # ============================================================
 
 class FocusAreaCalibrator:
-
-    def __init__(
-        self,
-        parent,
-        on_confirm
-    ):
-
+    def __init__(self, parent, on_confirm):
         self.parent = parent
         self.on_confirm = on_confirm
-
         self.dragging = False
-
         self.start_x = 0
         self.start_y = 0
-
         self.end_x = 0
         self.end_y = 0
-
         self.rectangle_id = None
         self.center_line_id = None
 
-        # ----------------------------------------------------
-        # Full-screen transparent overlay
-        # ----------------------------------------------------
+        self.window = tk.Toplevel(parent)
+        self.window.title("Hudl Focus Area Calibration")
+        self.window.attributes("-fullscreen", True, "-topmost", True, "-alpha", 0.35)
+        self.window.configure(bg="#000000", cursor="crosshair")
 
-        self.window = tk.Toplevel(
-            parent
+        self.canvas = tk.Canvas(self.window, bg="#000000", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+
+        self.canvas.create_text(
+            40, 35, anchor="nw", fill="#00ffcc",
+            font=("Segoe UI", 16, "bold"),
+            text="HUDL COURT CALIBRATION\n\nDrag a rectangle across the full court area.\nENTER = Confirm  |  ESC = Cancel"
         )
 
-        self.window.title(
-            "Hudl Focus Area Calibration"
-        )
+        self.canvas.bind("<ButtonPress-1>", self.mouse_down)
+        self.canvas.bind("<B1-Motion>", self.mouse_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.mouse_up)
 
-        self.window.attributes(
-            "-fullscreen",
-            True
-        )
-
-        self.window.attributes(
-            "-topmost",
-            True
-        )
-
-        self.window.attributes(
-            "-alpha",
-            0.35
-        )
-
-        self.window.configure(
-            bg="black"
-        )
-
-        self.window.config(
-            cursor="crosshair"
-        )
-
-        # ----------------------------------------------------
-        # Canvas
-        # ----------------------------------------------------
-
-        self.canvas = tk.Canvas(
-            self.window,
-            bg="black",
-            highlightthickness=0
-        )
-
-        self.canvas.pack(
-            fill="both",
-            expand=True
-        )
-
-        # ----------------------------------------------------
-        # Instructions
-        # ----------------------------------------------------
-
-        self.instruction_id = self.canvas.create_text(
-            40,
-            35,
-            anchor="nw",
-            fill="#00ff66",
-            font=(
-                "Segoe UI",
-                17,
-                "bold"
-            ),
-            text=(
-                "HUDL FOCUS AREA CALIBRATION\n\n"
-                "Drag a rectangle around the complete "
-                "Location / Court area.\n\n"
-                "The horizontal center line is calculated "
-                "automatically.\n\n"
-                "ENTER = Confirm\n"
-                "ESC = Cancel"
-            )
-        )
-
-        # ----------------------------------------------------
-        # Mouse events
-        # ----------------------------------------------------
-
-        self.canvas.bind(
-            "<ButtonPress-1>",
-            self.mouse_down
-        )
-
-        self.canvas.bind(
-            "<B1-Motion>",
-            self.mouse_drag
-        )
-
-        self.canvas.bind(
-            "<ButtonRelease-1>",
-            self.mouse_up
-        )
-
-        # ----------------------------------------------------
-        # Keyboard events
-        # ----------------------------------------------------
-
-        self.window.bind(
-            "<Return>",
-            self.confirm
-        )
-
-        self.window.bind(
-            "<Escape>",
-            self.cancel
-        )
-
+        self.window.bind("<Return>", self.confirm)
+        self.window.bind("<Escape>", lambda e: self.window.destroy())
         self.window.focus_force()
 
-    # ========================================================
-    # MOUSE DOWN
-    # ========================================================
-
-    def mouse_down(
-        self,
-        event
-    ):
-
+    def mouse_down(self, event):
         self.dragging = True
-
         self.start_x = event.x_root
         self.start_y = event.y_root
-
         self.end_x = self.start_x
         self.end_y = self.start_y
 
-        # Remove old rectangle.
         if self.rectangle_id:
-            self.canvas.delete(
-                self.rectangle_id
-            )
-
+            self.canvas.delete(self.rectangle_id)
         if self.center_line_id:
-            self.canvas.delete(
-                self.center_line_id
-            )
+            self.canvas.delete(self.center_line_id)
 
-        # Create rectangle.
         self.rectangle_id = self.canvas.create_rectangle(
-            self.start_x,
-            self.start_y,
-            self.end_x,
-            self.end_y,
-            outline="#00ff66",
-            width=3
+            self.start_x, self.start_y, self.end_x, self.end_y, outline="#00ffcc", width=3
         )
 
-    # ========================================================
-    # MOUSE DRAG
-    # ========================================================
-
-    def mouse_drag(
-        self,
-        event
-    ):
-
+    def mouse_drag(self, event):
         if not self.dragging:
             return
 
         self.end_x = event.x_root
         self.end_y = event.y_root
 
-        x1 = min(
-            self.start_x,
-            self.end_x
-        )
-
-        x2 = max(
-            self.start_x,
-            self.end_x
-        )
-
-        y1 = min(
-            self.start_y,
-            self.end_y
-        )
-
-        y2 = max(
-            self.start_y,
-            self.end_y
-        )
-
-        # ----------------------------------------------------
-        # Update rectangle
-        # ----------------------------------------------------
+        x1, x2 = min(self.start_x, self.end_x), max(self.start_x, self.end_x)
+        y1, y2 = min(self.start_y, self.end_y), max(self.start_y, self.end_y)
 
         if self.rectangle_id:
+            self.canvas.coords(self.rectangle_id, x1, y1, x2, y2)
 
-            self.canvas.coords(
-                self.rectangle_id,
-                x1,
-                y1,
-                x2,
-                y2
-            )
-
-        # ----------------------------------------------------
-        # AUTOMATIC CENTER LINE
-        # ----------------------------------------------------
-
-        center_y = y1 + (
-            (y2 - y1) / 2
-        )
-
-        # Delete old center line.
+        center_y = y1 + ((y2 - y1) / 2)
         if self.center_line_id:
+            self.canvas.delete(self.center_line_id)
 
-            self.canvas.delete(
-                self.center_line_id
-            )
-
-        # Draw new center line.
         self.center_line_id = self.canvas.create_line(
-            x1,
-            center_y,
-            x2,
-            center_y,
-            fill="#00ffff",
-            width=3,
-            dash=(
-                8,
-                5
-            )
+            x1, center_y, x2, center_y, fill="#ff007f", width=2, dash=(6, 4)
         )
 
-        # ----------------------------------------------------
-        # Display dimensions
-        # ----------------------------------------------------
-
-        width = x2 - x1
-        height = y2 - y1
-
-        self.canvas.delete(
-            "dimension_text"
-        )
-
-        self.canvas.create_text(
-            x1,
-            y2 + 20,
-            anchor="nw",
-            fill="#ffffff",
-            font=(
-                "Segoe UI",
-                12,
-                "bold"
-            ),
-            tags="dimension_text",
-            text=(
-                f"Width: {width}px    "
-                f"Height: {height}px    "
-                f"Center Y: {int(center_y)}"
-            )
-        )
-
-    # ========================================================
-    # MOUSE UP
-    # ========================================================
-
-    def mouse_up(
-        self,
-        event
-    ):
-
-        if not self.dragging:
-            return
-
+    def mouse_up(self, event):
         self.dragging = False
 
-        self.end_x = event.x_root
-        self.end_y = event.y_root
-
-    # ========================================================
-    # CONFIRM
-    # ========================================================
-
-    def confirm(
-        self,
-        event=None
-    ):
-
-        x1 = min(
-            self.start_x,
-            self.end_x
-        )
-
-        x2 = max(
-            self.start_x,
-            self.end_x
-        )
-
-        y1 = min(
-            self.start_y,
-            self.end_y
-        )
-
-        y2 = max(
-            self.start_y,
-            self.end_y
-        )
-
-        width = x2 - x1
-        height = y2 - y1
-
-        # ----------------------------------------------------
-        # Validate
-        # ----------------------------------------------------
+    def confirm(self, event=None):
+        x1, x2 = min(self.start_x, self.end_x), max(self.start_x, self.end_x)
+        y1, y2 = min(self.start_y, self.end_y), max(self.start_y, self.end_y)
+        width, height = x2 - x1, y2 - y1
 
         if width < 50 or height < 100:
-
             messagebox.showwarning(
-                "Invalid Focus Area",
-                (
-                    "The selected area is too small.\n\n"
-                    "Please drag around the complete "
-                    "Hudl Location / Court area."
-                ),
+                "Invalid Area", "Selection too small. Drag across the full location grid.",
                 parent=self.window
             )
-
             return
 
-        # ----------------------------------------------------
-        # EXACT CENTER
-        # ----------------------------------------------------
-
-        center_y = y1 + (
-            height / 2
-        )
-
-        # ----------------------------------------------------
-        # Save calibration
-        # ----------------------------------------------------
-
+        center_y = y1 + (height / 2)
         calibrated_data = {
-            "left": int(x1),
-            "top": int(y1),
-            "right": int(x2),
-            "bottom": int(y2),
-            "middle": int(center_y),
+            "left": int(x1), "top": int(y1), "right": int(x2),
+            "bottom": int(y2), "middle": int(center_y)
         }
-
-        # ----------------------------------------------------
-        # Close overlay
-        # ----------------------------------------------------
-
         self.window.destroy()
-
-        # ----------------------------------------------------
-        # Send data to application
-        # ----------------------------------------------------
-
-        self.on_confirm(
-            calibrated_data
-        )
-
-    # ========================================================
-    # CANCEL
-    # ========================================================
-
-    def cancel(
-        self,
-        event=None
-    ):
-
-        self.window.destroy()
-
+        self.on_confirm(calibrated_data)
 
 # ============================================================
 # MAIN APPLICATION
 # ============================================================
 
 class AttackLocation2DApp:
-
-    def __init__(
-        self,
-        root
-    ):
-
+    def __init__(self, root):
         self.root = root
-
-        self.root.title(
-            "Hudl Attack Location 2D"
-        )
-
-        self.root.geometry(
-            "560x650"
-        )
-
-        self.root.resizable(
-            False,
-            False
-        )
-
-        self.root.attributes(
-            "-topmost",
-            True
-        )
-
-        # ----------------------------------------------------
-        # Build interface
-        # ----------------------------------------------------
+        self.root.title("Attack 2D Tagger")
+        self.root.geometry("390x440+40+80")
+        self.root.resizable(False, False)
+        self.root.attributes("-topmost", True)
+        self.root.configure(bg="#181a20")
 
         self.create_interface()
+        self.setup_keyboard_shortcuts()
 
-        # ----------------------------------------------------
-        # F8 fallback
-        # ----------------------------------------------------
-
-        self.root.bind(
-            "<F8>",
-            lambda event: self.stop()
-        )
-
-        self.root.bind(
-            "<Escape>",
-            lambda event: None
-        )
-
-        # ----------------------------------------------------
-        # Try global keyboard hotkey
-        # ----------------------------------------------------
-
-        self.setup_global_hotkey()
-
-    # ========================================================
-    # INTERFACE
-    # ========================================================
+    def _validate_numeric(self, proposed):
+        """Enforces strictly numeric input (0-9 only)."""
+        if proposed == "":
+            return True
+        return proposed.isdigit()
 
     def create_interface(self):
-
-        # ----------------------------------------------------
-        # Title
-        # ----------------------------------------------------
-
-        title = tk.Label(
-            self.root,
-            text="HUDL ATTACK LOCATION 2D",
-            font=(
-                "Segoe UI",
-                19,
-                "bold"
-            )
-        )
-
-        title.pack(
-            pady=(20, 3)
-        )
-
-        subtitle = tk.Label(
-            self.root,
-            text=(
-                "Random opposite-half iteration tagger"
-            ),
-            font=(
-                "Segoe UI",
-                10
-            )
-        )
-
-        subtitle.pack()
-
-        # ----------------------------------------------------
-        # Settings
-        # ----------------------------------------------------
-
-        settings = tk.LabelFrame(
-            self.root,
-            text="Automation Settings",
-            font=(
-                "Segoe UI",
-                10,
-                "bold"
-            ),
-            padx=15,
-            pady=10
-        )
-
-        settings.pack(
-            padx=25,
-            pady=20,
-            fill="x"
-        )
-
-        # ----------------------------------------------------
-        # Iterations
-        # ----------------------------------------------------
+        # 1. Header Bar
+        header = tk.Frame(self.root, bg="#181a20")
+        header.pack(fill="x", padx=16, pady=(14, 6))
 
         tk.Label(
-            settings,
-            text="Iterations:"
-        ).grid(
-            row=0,
-            column=0,
-            sticky="w",
-            padx=8,
-            pady=8
+            header, text="ATTACK 2D TAGGER",
+            font=("Segoe UI", 13, "bold"), fg="#ffffff", bg="#181a20"
+        ).pack(side="left")
+
+        self.badge = tk.Label(
+            header, text="IDLE", font=("Segoe UI", 8, "bold"),
+            bg="#2c313d", fg="#8da0b6", padx=8, pady=2
         )
+        self.badge.pack(side="right")
+
+        # 2. Main Card
+        card = tk.Frame(self.root, bg="#232730", bd=0, padx=14, pady=12)
+        card.pack(fill="x", padx=16, pady=4)
+
+        # Iterations Row
+        iter_row = tk.Frame(card, bg="#232730")
+        iter_row.pack(fill="x", pady=4)
+
+        tk.Label(
+            iter_row, text="Iterations (I):",
+            font=("Segoe UI", 10, "bold"), fg="#e0e6ed", bg="#232730"
+        ).pack(side="left")
+
+        validate_cmd = (self.root.register(self._validate_numeric), "%P")
 
         self.iterations_entry = tk.Entry(
-            settings,
-            width=14,
-            justify="center",
-            font=(
-                "Consolas",
-                12
-            )
+            iter_row, width=7, font=("Consolas", 13, "bold"),
+            justify="center", bg="#181a20", fg="#00ffcc",
+            insertbackground="#ffffff", bd=1, relief="flat", highlightthickness=1,
+            highlightbackground="#3b4252", highlightcolor="#00ffcc",
+            validate="key", validatecommand=validate_cmd
         )
+        self.iterations_entry.insert(0, "5")
+        self.iterations_entry.pack(side="right")
 
-        self.iterations_entry.insert(
-            0,
-            "5"
-        )
+        # Handle keys specifically inside the entry
+        self.iterations_entry.bind("<KeyPress>", self._entry_key_handler)
 
-        self.iterations_entry.grid(
-            row=0,
-            column=1,
-            padx=8
-        )
+        # Settings Row (Click Delay & Distance)
+        tune_row = tk.Frame(card, bg="#232730")
+        tune_row.pack(fill="x", pady=(8, 2))
 
-        # ----------------------------------------------------
-        # Click delay
-        # ----------------------------------------------------
-
-        tk.Label(
-            settings,
-            text="Click delay:"
-        ).grid(
-            row=1,
-            column=0,
-            sticky="w",
-            padx=8,
-            pady=8
-        )
-
+        tk.Label(tune_row, text="Delay (s):", font=("Segoe UI", 8), fg="#9ba7b6", bg="#232730").pack(side="left")
         self.click_delay_entry = tk.Entry(
-            settings,
-            width=14,
-            justify="center",
-            font=(
-                "Consolas",
-                12
-            )
+            tune_row, width=5, font=("Consolas", 9), justify="center",
+            bg="#181a20", fg="#e0e6ed", insertbackground="#fff", bd=0, highlightthickness=1,
+            highlightbackground="#3b4252"
         )
+        self.click_delay_entry.insert(0, str(DEFAULT_CLICK_DELAY))
+        self.click_delay_entry.pack(side="left", padx=4)
 
-        self.click_delay_entry.insert(
-            0,
-            str(DEFAULT_CLICK_DELAY)
-        )
-
-        self.click_delay_entry.grid(
-            row=1,
-            column=1,
-            padx=8
-        )
-
-        tk.Label(
-            settings,
-            text="seconds"
-        ).grid(
-            row=1,
-            column=2
-        )
-
-        # ----------------------------------------------------
-        # Set delay
-        # ----------------------------------------------------
-
-        tk.Label(
-            settings,
-            text="Set delay:"
-        ).grid(
-            row=2,
-            column=0,
-            sticky="w",
-            padx=8,
-            pady=8
-        )
-
-        self.set_delay_entry = tk.Entry(
-            settings,
-            width=14,
-            justify="center",
-            font=(
-                "Consolas",
-                12
-            )
-        )
-
-        self.set_delay_entry.insert(
-            0,
-            str(DEFAULT_SET_DELAY)
-        )
-
-        self.set_delay_entry.grid(
-            row=2,
-            column=1,
-            padx=8
-        )
-
-        tk.Label(
-            settings,
-            text="seconds"
-        ).grid(
-            row=2,
-            column=2
-        )
-
-        # ----------------------------------------------------
-        # Edge margin
-        # ----------------------------------------------------
-
-        tk.Label(
-            settings,
-            text="Edge margin:"
-        ).grid(
-            row=3,
-            column=0,
-            sticky="w",
-            padx=8,
-            pady=8
-        )
-
-        self.margin_entry = tk.Entry(
-            settings,
-            width=14,
-            justify="center",
-            font=(
-                "Consolas",
-                12
-            )
-        )
-
-        self.margin_entry.insert(
-            0,
-            str(DEFAULT_EDGE_MARGIN)
-        )
-
-        self.margin_entry.grid(
-            row=3,
-            column=1,
-            padx=8
-        )
-
-        tk.Label(
-            settings,
-            text="0.12 = 12%"
-        ).grid(
-            row=3,
-            column=2
-        )
-
-        # ----------------------------------------------------
-        # Minimum point distance
-        # ----------------------------------------------------
-
-        tk.Label(
-            settings,
-            text="Min point distance:"
-        ).grid(
-            row=4,
-            column=0,
-            sticky="w",
-            padx=8,
-            pady=8
-        )
-
+        tk.Label(tune_row, text="Dist (px):", font=("Segoe UI", 8), fg="#9ba7b6", bg="#232730").pack(side="left", padx=(10, 0))
         self.distance_entry = tk.Entry(
-            settings,
-            width=14,
-            justify="center",
-            font=(
-                "Consolas",
-                12
-            )
+            tune_row, width=4, font=("Consolas", 9), justify="center",
+            bg="#181a20", fg="#e0e6ed", insertbackground="#fff", bd=0, highlightthickness=1,
+            highlightbackground="#3b4252"
         )
+        self.distance_entry.insert(0, str(DEFAULT_MIN_POINT_DISTANCE))
+        self.distance_entry.pack(side="left", padx=4)
 
-        self.distance_entry.insert(
-            0,
-            str(DEFAULT_MIN_POINT_DISTANCE)
-        )
+        self.set_delay_entry = tk.Entry(self.root)
+        self.set_delay_entry.insert(0, str(DEFAULT_SET_DELAY))
+        self.margin_entry = tk.Entry(self.root)
+        self.margin_entry.insert(0, str(DEFAULT_EDGE_MARGIN))
 
-        self.distance_entry.grid(
-            row=4,
-            column=1,
-            padx=8
-        )
-
-        tk.Label(
-            settings,
-            text="pixels"
-        ).grid(
-            row=4,
-            column=2
-        )
-
-        # ----------------------------------------------------
-        # Calibration status
-        # ----------------------------------------------------
-
-        self.calibration_label = tk.Label(
-            self.root,
-            text=(
-                "FOCUS AREA: DEFAULT\n"
-                f"X: {crop['left']} → {crop['right']}\n"
-                f"Y: {crop['top']} → {crop['bottom']}\n"
-                f"CENTER: Y = {crop['middle']}\n"
-                f"SIZE: {crop['right'] - crop['left']} × "
-                f"{crop['bottom'] - crop['top']}px"
-            ),
-            fg="#008000",
-            font=(
-                "Segoe UI",
-                11,
-                "bold"
-            ),
-            justify="center"
-        )
-
-        self.calibration_label.pack(
-            pady=(5, 12)
-        )
-
-        # ----------------------------------------------------
-        # Calibration button
-        # ----------------------------------------------------
-
-        self.calibrate_button = tk.Button(
-            self.root,
-            text="CALIBRATE / CHANGE FOCUS AREA",
-            command=self.start_calibration,
-            font=(
-                "Segoe UI",
-                11,
-                "bold"
-            ),
-            width=34,
-            height=2
-        )
-
-        self.calibrate_button.pack(
-            pady=5
-        )
-
-        # ----------------------------------------------------
-        # Start
-        # ----------------------------------------------------
+        # 3. Action Buttons
+        btn_box = tk.Frame(self.root, bg="#181a20")
+        btn_box.pack(fill="x", padx=16, pady=10)
 
         self.start_button = tk.Button(
-            self.root,
-            text="2. START ITERATION",
-            command=self.start,
-            font=(
-                "Segoe UI",
-                12,
-                "bold"
-            ),
-            width=34,
-            height=2
+            btn_box, text="START (E)", command=self.start,
+            font=("Segoe UI", 10, "bold"), bg="#059669", activebackground="#10b981",
+            fg="#ffffff", activeforeground="#ffffff", relief="flat", cursor="hand2", height=2
         )
-
-        self.start_button.pack(
-            pady=5
-        )
-
-        # ----------------------------------------------------
-        # Stop
-        # ----------------------------------------------------
+        self.start_button.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
         self.stop_button = tk.Button(
-            self.root,
-            text="STOP",
-            command=self.stop,
-            font=(
-                "Segoe UI",
-                11,
-                "bold"
-            ),
-            width=34,
-            height=2,
-            state=tk.DISABLED
+            btn_box, text="STOP (S)", command=self.stop,
+            font=("Segoe UI", 10, "bold"), bg="#dc2626", activebackground="#ef4444",
+            fg="#ffffff", activeforeground="#ffffff", relief="flat", cursor="hand2", height=2, state=tk.DISABLED
         )
+        self.stop_button.pack(side="left", fill="x", expand=True, padx=(4, 0))
 
-        self.stop_button.pack(
-            pady=5
-        )
-
-        # ----------------------------------------------------
-        # Progress
-        # ----------------------------------------------------
+        # 4. Progress Card
+        prog_card = tk.Frame(self.root, bg="#232730", padx=12, pady=10)
+        prog_card.pack(fill="x", padx=16, pady=4)
 
         self.progress_label = tk.Label(
-            self.root,
-            text="SET: 0 / 0",
-            font=(
-                "Consolas",
-                15,
-                "bold"
-            )
+            prog_card, text="SET: 0 / 0", font=("Consolas", 15, "bold"),
+            fg="#00ffcc", bg="#232730"
         )
-
-        self.progress_label.pack(
-            pady=(18, 5)
-        )
-
-        # ----------------------------------------------------
-        # Status
-        # ----------------------------------------------------
+        self.progress_label.pack()
 
         self.status_label = tk.Label(
-            self.root,
-            text="Ready",
-            font=(
-                "Segoe UI",
-                10
-            ),
-            justify="center",
-            wraplength=500
+            prog_card, text="Press I to type, E to start immediately",
+            font=("Segoe UI", 9), fg="#9ba7b6", bg="#232730", wraplength=350
         )
+        self.status_label.pack(pady=(2, 0))
 
-        self.status_label.pack(
-            pady=5
+        # 5. Bottom Toolbar & Calibration
+        bot_bar = tk.Frame(self.root, bg="#181a20")
+        bot_bar.pack(fill="x", side="bottom", padx=16, pady=(0, 10))
+
+        self.cal_btn = tk.Button(
+            bot_bar, text="Calibrate Area", command=self.start_calibration,
+            font=("Segoe UI", 8), bg="#2a2e39", fg="#8da0b6", activebackground="#383e4d",
+            activeforeground="#ffffff", relief="flat", cursor="hand2", pady=4
         )
+        self.cal_btn.pack(side="left")
 
-        # ----------------------------------------------------
-        # Instructions
-        # ----------------------------------------------------
-
-        info = tk.Label(
-            self.root,
-            text=(
-                "\nEvery set:\n"
-                "TOP → BOTTOM → E\n"
-                "OR\n"
-                "BOTTOM → TOP → E\n\n"
-                "Coordinates are randomized automatically.\n"
-                "F8 = Emergency Stop"
-            ),
-            font=(
-                "Segoe UI",
-                10
-            ),
-            justify="center"
-        )
-
-        info.pack(
-            pady=12
-        )
+        tk.Label(
+            bot_bar, text="I: Count | E: Run | S: Stop | X: Exit",
+            font=("Segoe UI", 8, "bold"), fg="#5c667a", bg="#181a20"
+        ).pack(side="right")
 
     # ========================================================
-    # GLOBAL HOTKEY
+    # KEYBOARD ROUTING & DISPATCH
     # ========================================================
-
-    def setup_global_hotkey(self):
-
+    def setup_keyboard_shortcuts(self):
+        self.root.bind_all("<KeyPress>", self._handle_keypress)
         try:
-
             import keyboard
-
-            keyboard.add_hotkey(
-                STOP_HOTKEY,
-                self.global_stop
-            )
-
+            keyboard.add_hotkey(STOP_HOTKEY, lambda: self.root.after(0, self.stop))
         except Exception:
-
             pass
 
-    # --------------------------------------------------------
+    def _entry_key_handler(self, event):
+        """Intercepts special hotkeys inside the entry so letters are never inserted."""
+        key = event.keysym.lower()
 
-    def global_stop(self):
+        if key == "e":
+            self.root.focus_set()
+            if not automation_running:
+                self.start()
+            return "break"
 
-        self.root.after(
-            0,
-            self.stop
-        )
+        if key == "s":
+            self.root.focus_set()
+            if automation_running:
+                self.stop()
+            return "break"
+
+        if key == "x":
+            self.close_app()
+            return "break"
+
+        return None
+
+    def _handle_keypress(self, event):
+        key = event.keysym.lower()
+        focused = self.root.focus_get()
+
+        if isinstance(focused, tk.Entry):
+            return
+
+        if key == "x":
+            self.close_app()
+            return "break"
+
+        if key == "s":
+            if automation_running:
+                self.stop()
+                return "break"
+
+        if key == "i":
+            self.iterations_entry.focus_set()
+            self.iterations_entry.selection_range(0, tk.END)
+            return "break"
+
+        if key == "e":
+            if not automation_running:
+                self.root.focus_set()
+                self.start()
+            return "break"
 
     # ========================================================
     # CALIBRATION
     # ========================================================
-
     def start_calibration(self):
+        FocusAreaCalibrator(self.root, self.calibration_complete)
 
-        self.status_label.config(
-            text=(
-                "Default focus area loaded.\n"
-                "Click CALIBRATE / CHANGE FOCUS AREA to select a "
-                "different area."
-            )
-        )
-
-        FocusAreaCalibrator(
-            self.root,
-            self.calibration_complete
-        )
-
-    # ========================================================
-    # CALIBRATION COMPLETE
-    # ========================================================
-
-    def calibration_complete(
-        self,
-        data
-    ):
-
+    def calibration_complete(self, data):
         global crop
-
         crop = data
 
-        width = (
-            crop["right"] -
-            crop["left"]
-        )
+        cfg = load_global_config()
+        cfg.setdefault("attack_2d", {})["focus_area"] = crop
+        save_global_config(cfg)
 
-        height = (
-            crop["bottom"] -
-            crop["top"]
-        )
-
-        self.calibration_label.config(
-            text=(
-                "FOCUS AREA: CALIBRATED\n"
-                f"X: {crop['left']} → {crop['right']}\n"
-                f"Y: {crop['top']} → {crop['bottom']}\n"
-                f"CENTER: Y = {crop['middle']}\n"
-                f"SIZE: {width} × {height}px"
-            ),
-            fg="#008000"
-        )
-
-        self.status_label.config(
-            text=(
-                "Calibration complete.\n"
-                "The center line is exactly 50% of "
-                "the selected focus area."
-            )
-        )
+        self.status_label.config(text="Focus area saved to global config.", fg="#00ffcc")
 
     # ========================================================
-    # READ SETTINGS
+    # RUN ENGINE
     # ========================================================
-
     def read_settings(self):
-
         try:
-
-            iterations = int(
-                self.iterations_entry.get()
-            )
-
-            click_delay = float(
-                self.click_delay_entry.get()
-            )
-
-            set_delay = float(
-                self.set_delay_entry.get()
-            )
-
-            edge_margin = float(
-                self.margin_entry.get()
-            )
-
-            minimum_distance = float(
-                self.distance_entry.get()
-            )
-
+            raw_iter = self.iterations_entry.get().strip()
+            iterations = int(raw_iter) if raw_iter else 5
+            click_delay = float(self.click_delay_entry.get())
+            set_delay = float(self.set_delay_entry.get())
+            edge_margin = float(self.margin_entry.get())
+            minimum_distance = float(self.distance_entry.get())
         except ValueError:
-
-            messagebox.showerror(
-                "Invalid Settings",
-                "Please enter valid numbers."
-            )
-
+            messagebox.showerror("Invalid Settings", "Please enter valid numeric values.")
             return None
-
-        # ----------------------------------------------------
-        # Validation
-        # ----------------------------------------------------
 
         if iterations <= 0:
-
-            messagebox.showerror(
-                "Invalid Iterations",
-                "Iterations must be greater than 0."
-            )
-
-            return None
-
-        if click_delay < 0:
-
-            messagebox.showerror(
-                "Invalid Click Delay",
-                "Click delay cannot be negative."
-            )
-
-            return None
-
-        if set_delay < 0:
-
-            messagebox.showerror(
-                "Invalid Set Delay",
-                "Set delay cannot be negative."
-            )
-
-            return None
-
-        if not 0 <= edge_margin < 0.5:
-
-            messagebox.showerror(
-                "Invalid Edge Margin",
-                "Edge margin must be between 0 and 0.49."
-            )
-
-            return None
-
-        if minimum_distance < 0:
-
-            messagebox.showerror(
-                "Invalid Distance",
-                "Minimum distance cannot be negative."
-            )
-
-            return None
-
-        return (
-            iterations,
-            click_delay,
-            set_delay,
-            edge_margin,
-            minimum_distance,
-        )
-
-    # ========================================================
-    # START
-    # ========================================================
+            iterations = 1
+        return iterations, click_delay, set_delay, edge_margin, minimum_distance
 
     def start(self):
-
-        global automation_running
-        global last_top_point
-        global last_bottom_point
-
-        # ----------------------------------------------------
-        # Check calibration
-        # ----------------------------------------------------
+        global automation_running, last_top_point, last_bottom_point
 
         if not is_calibrated():
-
-            messagebox.showwarning(
-                "Focus Area Required",
-                (
-                    "Please calibrate the Hudl "
-                    "focus area first."
-                )
-            )
-
+            messagebox.showwarning("Calibration Required", "Please calibrate court area first.")
             return
 
-        # ----------------------------------------------------
-        # Read settings
-        # ----------------------------------------------------
-
         settings = self.read_settings()
-
         if settings is None:
             return
 
-        (
-            iterations,
-            click_delay,
-            set_delay,
-            edge_margin,
-            minimum_distance,
-        ) = settings
-
-        # ----------------------------------------------------
-        # Reset
-        # ----------------------------------------------------
+        iterations, click_delay, set_delay, edge_margin, minimum_distance = settings
 
         stop_event.clear()
-
         last_top_point = None
         last_bottom_point = None
-
         automation_running = True
 
-        # ----------------------------------------------------
-        # UI
-        # ----------------------------------------------------
+        self.badge.config(text="RUNNING", bg="#059669", fg="#ffffff")
+        self.start_button.config(state=tk.DISABLED, bg="#2c313d")
+        self.stop_button.config(state=tk.NORMAL)
+        self.progress_label.config(text=f"SET: 0 / {iterations}")
+        self.status_label.config(text="Tagging sets...", fg="#00ffcc")
 
-        self.start_button.config(
-            state=tk.DISABLED
-        )
+        self.root.focus_set()
 
-        self.calibrate_button.config(
-            state=tk.DISABLED
-        )
-
-        self.stop_button.config(
-            state=tk.NORMAL
-        )
-
-        self.progress_label.config(
-            text=f"SET: 0 / {iterations}"
-        )
-
-        self.status_label.config(
-            text="Starting..."
-        )
-
-        # ----------------------------------------------------
-        # Run in background
-        # ----------------------------------------------------
-
-        worker = threading.Thread(
+        threading.Thread(
             target=self.run_iterations,
-            args=(
-                iterations,
-                click_delay,
-                set_delay,
-                edge_margin,
-                minimum_distance,
-            ),
+            args=(iterations, click_delay, set_delay, edge_margin, minimum_distance),
             daemon=True
-        )
+        ).start()
 
-        worker.start()
-
-    # ========================================================
-    # ITERATION ENGINE
-    # ========================================================
-
-    def run_iterations(
-        self,
-        iterations,
-        click_delay,
-        set_delay,
-        edge_margin,
-        minimum_distance,
-    ):
-
+    def run_iterations(self, iterations, click_delay, set_delay, edge_margin, minimum_distance):
         global automation_running
-
-        # Disable PyAutoGUI's built-in pause.
         pyautogui.PAUSE = 0
 
         try:
-
-            for set_number in range(
-                1,
-                iterations + 1
-            ):
-
-                # ------------------------------------------------
-                # Stop check
-                # ------------------------------------------------
-
+            for set_number in range(1, iterations + 1):
                 if stop_event.is_set():
                     break
 
-                # ------------------------------------------------
-                # Random direction
-                # ------------------------------------------------
-
-                if random.choice(
-                    [True, False]
-                ):
-
-                    first_half = "top"
-                    second_half = "bottom"
-
+                if random.choice([True, False]):
+                    first_half, second_half = "top", "bottom"
                 else:
+                    first_half, second_half = "bottom", "top"
 
-                    first_half = "bottom"
-                    second_half = "top"
+                first_point = generate_random_point(first_half, edge_margin, minimum_distance)
+                second_point = generate_random_point(second_half, edge_margin, minimum_distance)
 
-                # ------------------------------------------------
-                # Generate first coordinate
-                # ------------------------------------------------
+                remember_point(first_half, first_point)
+                remember_point(second_half, second_point)
 
-                first_point = generate_random_point(
-                    first_half,
-                    edge_margin,
-                    minimum_distance
-                )
-
-                # ------------------------------------------------
-                # Generate second coordinate
-                # ------------------------------------------------
-
-                second_point = generate_random_point(
-                    second_half,
-                    edge_margin,
-                    minimum_distance
-                )
-
-                # ------------------------------------------------
-                # Remember points
-                # ------------------------------------------------
-
-                remember_point(
-                    first_half,
-                    first_point
-                )
-
-                remember_point(
-                    second_half,
-                    second_point
-                )
-
-                # ------------------------------------------------
-                # UI status
-                # ------------------------------------------------
-
-                direction = (
-                    f"{first_half.upper()} "
-                    f"→ "
-                    f"{second_half.upper()}"
-                )
-
-                self.root.after(
-                    0,
-                    self.update_progress,
-                    set_number,
-                    iterations,
-                    direction,
-                    first_point,
-                    second_point
-                )
-
-                # ------------------------------------------------
-                # CLICK #1
-                # ------------------------------------------------
+                direction = f"{first_half.upper()} → {second_half.upper()}"
+                self.root.after(0, self.update_progress, set_number, iterations, direction)
 
                 if stop_event.is_set():
                     break
-
-                pyautogui.click(
-                    first_point[0],
-                    first_point[1]
-                )
-
-                time.sleep(
-                    click_delay
-                )
-
-                # ------------------------------------------------
-                # CLICK #2
-                # ------------------------------------------------
+                pyautogui.click(first_point[0], first_point[1])
+                time.sleep(click_delay)
 
                 if stop_event.is_set():
                     break
-
-                pyautogui.click(
-                    second_point[0],
-                    second_point[1]
-                )
-
-                time.sleep(
-                    click_delay
-                )
-
-                # ------------------------------------------------
-                # PRESS E
-                # ------------------------------------------------
+                pyautogui.click(second_point[0], second_point[1])
+                time.sleep(click_delay)
 
                 if stop_event.is_set():
                     break
+                pyautogui.press("e")
 
-                pyautogui.press(
-                    "e"
-                )
-
-                # ------------------------------------------------
-                # Wait before next set
-                # ------------------------------------------------
-
-                if stop_event.wait(
-                    set_delay
-                ):
+                if stop_event.wait(set_delay):
                     break
 
         except pyautogui.FailSafeException:
-
-            self.root.after(
-                0,
-                self.show_failsafe
-            )
-
-        except Exception as error:
-
-            self.root.after(
-                0,
-                self.show_error,
-                str(error)
-            )
-
+            self.root.after(0, lambda: messagebox.showwarning("FailSafe", "Mouse reached corner."))
         finally:
-
             automation_running = False
+            self.root.after(0, self.automation_finished)
 
-            self.root.after(
-                0,
-                self.automation_finished
-            )
-
-    # ========================================================
-    # PROGRESS UPDATE
-    # ========================================================
-
-    def update_progress(
-        self,
-        set_number,
-        total,
-        direction,
-        first_point,
-        second_point
-    ):
-
-        self.progress_label.config(
-            text=(
-                f"SET: {set_number} / {total}"
-            )
-        )
-
-        self.status_label.config(
-            text=(
-                f"Direction: {direction}\n\n"
-                f"Point 1: {first_point}\n"
-                f"Point 2: {second_point}\n\n"
-                f"Click 1 → Click 2 → E"
-            )
-        )
-
-    # ========================================================
-    # STOP
-    # ========================================================
+    def update_progress(self, set_number, total, direction):
+        self.progress_label.config(text=f"SET: {set_number} / {total}")
+        self.status_label.config(text=f"{direction} → E", fg="#00ffcc")
 
     def stop(self):
-
         global automation_running
-
         if not automation_running:
             return
-
         stop_event.set()
-
-        self.status_label.config(
-            text=(
-                "STOP REQUESTED\n"
-                "Waiting for current action to finish..."
-            )
-        )
-
-        self.stop_button.config(
-            state=tk.DISABLED
-        )
-
-    # ========================================================
-    # FINISHED
-    # ========================================================
+        self.badge.config(text="STOPPING", bg="#dc2626", fg="#ffffff")
+        self.status_label.config(text="Stopping...", fg="#ef4444")
+        self.stop_button.config(state=tk.DISABLED)
 
     def automation_finished(self):
-
         global automation_running
-
         automation_running = False
-
-        self.start_button.config(
-            state=tk.NORMAL
-        )
-
-        self.calibrate_button.config(
-            state=tk.NORMAL
-        )
-
-        self.stop_button.config(
-            state=tk.DISABLED
-        )
+        self.badge.config(text="IDLE", bg="#2c313d", fg="#8da0b6")
+        self.start_button.config(state=tk.NORMAL, bg="#059669")
+        self.stop_button.config(state=tk.DISABLED)
 
         if stop_event.is_set():
-
-            self.status_label.config(
-                text="Automation stopped."
-            )
-
+            self.status_label.config(text="Stopped. Press E to run again.", fg="#ef4444")
         else:
+            self.status_label.config(text="Done! Ready for next round (E).", fg="#10b981")
 
-            self.status_label.config(
-                text="All iterations completed."
-            )
+        # Refocus window immediately so hotkeys (E, I, X) work right away
+        self._refocus_app()
 
-    # ========================================================
-    # FAILSAFE
-    # ========================================================
+    def _refocus_app(self):
+        try:
+            self.root.lift()
+            self.root.attributes("-topmost", True)
+            self.root.focus_force()
+            import ctypes
+            hwnd = self.root.winfo_id()
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+        self.root.focus_set()
 
-    def show_failsafe(self):
-
-        messagebox.showwarning(
-            "PyAutoGUI Failsafe",
-            (
-                "Automation stopped because the "
-                "mouse reached the screen corner."
-            )
-        )
-
-    # ========================================================
-    # ERROR
-    # ========================================================
-
-    def show_error(
-        self,
-        error
-    ):
-
-        messagebox.showerror(
-            "Automation Error",
-            error
-        )
-
+    def close_app(self):
+        stop_event.set()
+        try:
+            import keyboard
+            keyboard.unhook_all_hotkeys()
+        except Exception:
+            pass
+        self.root.destroy()
 
 # ============================================================
 # MAIN
 # ============================================================
 
 def main():
-
-    # --------------------------------------------------------
-    # PyAutoGUI safety
-    # --------------------------------------------------------
-
     pyautogui.FAILSAFE = True
     pyautogui.PAUSE = 0
 
-    # --------------------------------------------------------
-    # Tkinter
-    # --------------------------------------------------------
-
     root = tk.Tk()
-
-    app = AttackLocation2DApp(
-        root
-    )
-
-    # --------------------------------------------------------
-    # Closing application
-    # --------------------------------------------------------
-
-    def close_application():
-
-        stop_event.set()
-
-        try:
-
-            import keyboard
-
-            keyboard.unhook_all_hotkeys()
-
-        except Exception:
-
-            pass
-
-        root.destroy()
-
-    root.protocol(
-        "WM_DELETE_WINDOW",
-        close_application
-    )
-
+    app = AttackLocation2DApp(root)
+    root.protocol("WM_DELETE_WINDOW", app.close_app)
     root.mainloop()
-
-
-# ============================================================
-# RUN
-# ============================================================
 
 if __name__ == "__main__":
     main()
