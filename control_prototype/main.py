@@ -15,7 +15,6 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Any
 
-import keyboard
 import pyautogui
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -222,8 +221,7 @@ class PlaySpeedApp:
         self.processing = False
         self.speed_queue: list[int] = []
         self.idle_job: str | None = None
-        self.hotkeys: list[Any] = []
-        self.shortcuts_active = False
+        self.shortcuts_active = True
         self.calibrating = False
         self.closed = False
 
@@ -233,6 +231,11 @@ class PlaySpeedApp:
         self._build_ui()
         self._refresh_coordinates()
         self._refresh_status()
+        # Tkinter-only shortcuts: active while this application has focus.
+        self.root.bind_all("<KeyPress-o>", self._on_tk_keypress)
+        self.root.bind_all("<KeyPress-O>", self._on_tk_keypress)
+        self.root.bind_all("<KeyPress-p>", self._on_tk_keypress)
+        self.root.bind_all("<KeyPress-P>", self._on_tk_keypress)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def _build_ui(self) -> None:
@@ -249,7 +252,7 @@ class PlaySpeedApp:
         controls = ttk.Frame(outer)
         controls.pack(anchor="w", pady=(0, 10))
         self.shortcuts_button = ttk.Button(
-            controls, text="Start global shortcuts", command=self.toggle_shortcuts
+            controls, text="Tkinter shortcuts enabled", command=self._show_shortcut_help
         )
         self.shortcuts_button.pack(side="left", padx=(0, 8))
         ttk.Button(
@@ -280,7 +283,7 @@ class PlaySpeedApp:
         ttk.Label(
             outer,
             text="Calibration uses the same fullscreen 30%-opacity overlay style as the jersey-number tagger. "
-                 "Coordinates are stored locally in control_prototype/coordinates.json.",
+                 "O/P bindings work only while this Tkinter window has focus. Coordinates are stored locally in control_prototype/coordinates.json.",
             wraplength=600,
         ).pack(anchor="w", pady=(8, 0))
 
@@ -298,45 +301,37 @@ class PlaySpeedApp:
         elif not self.config_data:
             self.status_var.set("Coordinates not configured. Select Set Targets / Recalibrate.")
         elif self.shortcuts_active:
-            self.status_var.set("Ready — use O to decrease and P to increase playback speed.")
+            self.status_var.set("Tkinter shortcuts active only while this app has focus: O slower, P faster.")
         else:
-            self.status_var.set("Coordinates loaded. Start global shortcuts when ready.")
+            self.status_var.set("Coordinates loaded. Click this window, then press O/P.")
 
-    def toggle_shortcuts(self) -> None:
-        if self.shortcuts_active:
-            self._stop_shortcuts()
-        else:
-            try:
-                self.hotkeys = [
-                    keyboard.add_hotkey("o", lambda: self._queue_speed(-1), suppress=False),
-                    keyboard.add_hotkey("p", lambda: self._queue_speed(1), suppress=False),
-                ]
-                self.shortcuts_active = True
-                self.shortcuts_button.configure(text="Stop global shortcuts")
-            except Exception as exc:
-                self._stop_shortcuts()
-                messagebox.showerror(
-                    "Shortcut error",
-                    f"Could not register global shortcuts. Check permissions and dependencies.\n\n{exc}",
-                    parent=self.root,
-                )
-        self._refresh_status()
+    def _show_shortcut_help(self) -> None:
+        messagebox.showinfo(
+            "Tkinter keyboard bindings",
+            "O decreases speed and P increases speed while this PlaySpeed window has focus. "
+            "Tkinter cannot receive global shortcuts while Hudl/Chrome is focused.",
+            parent=self.root,
+        )
+
+    def _on_tk_keypress(self, event) -> str | None:
+        if self.closed or self.calibrating:
+            return None
+        key = event.keysym.lower()
+        if key == "o":
+            self._queue_speed(-1)
+            return "break"
+        if key == "p":
+            self._queue_speed(1)
+            return "break"
+        return None
 
     def _stop_shortcuts(self) -> None:
-        for handle in self.hotkeys:
-            try:
-                keyboard.remove_hotkey(handle)
-            except Exception:
-                pass
-        self.hotkeys.clear()
+        # No global hooks are registered; Tkinter bindings are attached to the root.
         self.shortcuts_active = False
-        if hasattr(self, "shortcuts_button"):
-            self.shortcuts_button.configure(text="Start global shortcuts")
 
     def begin_calibration(self) -> None:
         if self.calibrating:
             return
-        self._stop_shortcuts()
         self.calibrating = True
         self.speed_queue.clear()
         self.processing = False
@@ -446,7 +441,6 @@ class PlaySpeedApp:
     def close(self) -> None:
         self.closed = True
         self._cancel_idle_timer()
-        self._stop_shortcuts()
         self.root.destroy()
 
 
