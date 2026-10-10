@@ -1,43 +1,34 @@
 # Hudl PlaySpeed Prototype
 
-A standalone prototype for changing Hudl playback speed using global **O** and **P** shortcuts. It does not edit or import the existing tagging programs.
+Standalone playback-speed controller using global **O** and **P** shortcuts. Existing tagging apps are not modified.
 
 ## Behaviour
 
-- The speed is assumed to start at **1x** each time the prototype launches.
-- Press **O** to decrease one step: `2.5x → 2x → 1.5x → 1x → 0.5x`.
-- Press **P** to increase one step: `0.5x → 1x → 1.5x → 2x → 2.5x`.
-- The first O/P press clicks the saved menu-button coordinate, waits briefly for the menu to open, then clicks the new speed option.
-- The menu remains open for quick repeated changes. If no O/P press occurs for 3 seconds, the saved exit-menu coordinate is clicked.
-- The speed state is held in memory during the session. It resets to 1x when the program restarts, as requested.
-- At the minimum or maximum, another key press stays at that boundary.
+- Speed is assumed to start at **1x** whenever the prototype launches.
+- **O** decreases one step: 2.5x → 2x → 1.5x → 1x → 0.5x.
+- **P** increases one step: 0.5x → 1x → 1.5x → 2x → 2.5x.
+- When the menu is closed, the first O/P press clicks the menu button and waits **350 ms** for Hudl's dropdown animation before selecting the new speed.
+- The menu closes after 3 seconds without another O/P press.
+- The main window displays every saved/captured coordinate.
 
 ## Install and run (Windows)
 
-Open PowerShell in this folder:
+    py -m pip install -r requirements.txt
+    py playspeed.py
 
-```powershell
-py -m pip install -r requirements.txt
-py playspeed.py
-```
+## Mouse-click calibration (no F8)
 
-Click **Calibrate / change coordinates** and follow the status instructions. For each target, place the mouse over the indicated Hudl control and press **F8**:
+1. Click **Calibrate / change coordinates** in the prototype.
+2. **Left-click** the Hudl playback menu button. Its coordinates are captured and the menu opens.
+3. Wait for the menu animation, then **left-click** 0.5x, 1x, 1.5x, 2x, and 2.5x in sequence. Each click captures that point and may also select the speed; the prototype reopens the menu and waits 350 ms before asking for the next point.
+4. After capturing 2.5x, the prototype reopens the menu. **Left-click a safe point outside the dropdown** to capture the exit-menu coordinate.
+5. The coordinates are saved to `coordinates.json`, displayed in the app, and reused next time. Recalibrate if browser zoom, display scaling, window position, or Hudl layout changes.
 
-1. Playback menu button (the prototype clicks it to open the menu)
-2. 0.5x
-3. 1x
-4. 1.5x
-5. 2x
-6. 2.5x
-7. A safe point outside the menu to close it
-
-The coordinates are saved to `coordinates.json` in this folder. The file is local and ignored by Git, so it is reused on this computer without recalibration. Recalibrate if the browser zoom, monitor scaling, window position, or Hudl layout changes.
-
-Once calibrated, click **Start global shortcuts**. Keep Hudl/Chrome open and use **O/P**. Click **Stop global shortcuts** before typing O/P in other applications.
+After calibration, click **Start global shortcuts**. Keep Hudl/Chrome open and use **O/P**. Click **Stop global shortcuts** before typing O/P in other applications.
 
 ## Safety and limitations
 
-- PyAutoGUI's fail-safe remains enabled: moving the mouse to the upper-left corner can abort an automation action.
-- Global keyboard hooks can behave differently across operating systems and may require extra permissions. This prototype should be tested on the target setup before integrating it into either tagging app.
-- The UI's displayed speed tracks the requested click sequence; it cannot independently verify what Hudl actually applied.
-- The prototype assumes the video begins at 1x each time it starts. If Hudl remembers a different speed between sessions, set Hudl back to 1x before using the prototype.
+- PyAutoGUI fail-safe is enabled; moving the mouse to the upper-left corner can abort an automation action.
+- Global keyboard/mouse hooks may require OS permissions.
+- Displayed speed tracks the requested click sequence; the prototype cannot independently verify Hudl's actual playback speed.
+- Set Hudl to 1x before use if it remembers a different speed from a previous session.
