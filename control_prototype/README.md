@@ -1,34 +1,29 @@
-# Hudl PlaySpeed Prototype
+# Hudl PlaySpeed
 
-Standalone playback-speed controller using global **O** and **P** shortcuts. Existing tagging apps are not modified.
+Everything is implemented in one file: `main.py`. It uses the same fullscreen, semi-transparent (30% opacity) calibration overlay style as `Jersey_Number_Tag.py`.
 
-## Behaviour
-
-- Speed is assumed to start at **1x** whenever the prototype launches.
-- **O** decreases one step: 2.5x → 2x → 1.5x → 1x → 0.5x.
-- **P** increases one step: 0.5x → 1x → 1.5x → 2x → 2.5x.
-- When the menu is closed, the first O/P press clicks the menu button and waits **350 ms** for Hudl's dropdown animation before selecting the new speed.
-- The menu closes after 3 seconds without another O/P press.
-- The main window displays every saved/captured coordinate.
-
-## Install and run (Windows)
+## Run
 
     py -m pip install -r requirements.txt
-    py playspeed.py
+    py main.py
 
-## Mouse-click calibration (no F8)
+## Calibration
 
-1. Click **Calibrate / change coordinates** in the prototype.
-2. **Left-click** the Hudl playback menu button. Its coordinates are captured and the menu opens.
-3. Wait for the menu animation, then **left-click** 0.5x, 1x, 1.5x, 2x, and 2.5x in sequence. Each click captures that point and may also select the speed; the prototype reopens the menu and waits 350 ms before asking for the next point.
-4. After capturing 2.5x, the prototype reopens the menu. **Left-click a safe point outside the dropdown** to capture the exit-menu coordinate.
-5. The coordinates are saved to `coordinates.json`, displayed in the app, and reused next time. Recalibrate if browser zoom, display scaling, window position, or Hudl layout changes.
+1. Click **Set Targets / Recalibrate**.
+2. A fullscreen semi-transparent black overlay appears, matching the jersey-number tagger's calibration style.
+3. Click the Hudl playback menu button.
+4. Click each speed option in order: 0.5x, 1x, 1.5x, 2x, 2.5x.
+5. Click a safe point outside the dropdown to capture the close-menu position.
+6. All seven coordinates are saved to `coordinates.json` and shown in the main window. Press Esc to cancel calibration.
 
-After calibration, click **Start global shortcuts**. Keep Hudl/Chrome open and use **O/P**. Click **Stop global shortcuts** before typing O/P in other applications.
+The overlay captures screen coordinates, then the app performs the actual Hudl clicks programmatically and reopens the menu between speed-option captures. The coordinates are local to your display setup and are not committed.
 
-## Safety and limitations
+## Controls
 
-- PyAutoGUI fail-safe is enabled; moving the mouse to the upper-left corner can abort an automation action.
-- Global keyboard/mouse hooks may require OS permissions.
-- Displayed speed tracks the requested click sequence; the prototype cannot independently verify Hudl's actual playback speed.
-- Set Hudl to 1x before use if it remembers a different speed from a previous session.
+- **O**: decrease speed by one step.
+- **P**: increase speed by one step.
+- First speed-change press opens the menu and waits **350 ms** before selecting.
+- Menu closes after **3 seconds** without further O/P input.
+- The current speed is assumed to be **1x** each time the program starts. If Hudl retained another speed, set it to 1x first.
+
+The existing tagging scripts are not modified by this prototype.
