@@ -1,172 +1,269 @@
 import tkinter as tk
 from tkinter import messagebox
 import pyautogui
+import threading
+import json
+import os
 import time
 
+try:
+    import keyboard
+    KEYBOARD_AVAILABLE = True
+except ImportError:
+    KEYBOARD_AVAILABLE = False
+
 pyautogui.FAILSAFE = True
-pyautogui.PAUSE = 0.05
+CONFIG_FILE = "hudl_tagger_config.json"
 
 class InteractiveHudlTagger:
     def __init__(self, root):
         self.root = root
-        self.root.title("Hudl Auto-Tagger")
-        self.root.geometry("450x300")
+        self.root.title("Hudl Auto-Tagger Pro")
+        self.root.geometry("480x420")
         self.root.attributes("-topmost", True)
         
-        # New Default Coordinates applied here
-        self.target_coord = (1698, 391) 
+        self.screen_width, self.screen_height = pyautogui.size()
+        self.is_running = False
+        self.history = []
         
-        # ==========================================
-        # UI Setup
-        # ==========================================
-        tk.Label(root, text="Hudl Interactive Tagger", font=("Segoe UI", 12, "bold")).pack(pady=10)
+        # Load saved coordinate configuration
+        self.target_coord = self.load_config()
+
+        # Speed profiles: (key_pause, step_delay)
+        self.speed_profiles = {
+            "Fast": (0.08, 0.2),
+            "Normal": (0.12, 0.35),
+            "Safe": (0.2, 0.5)
+        }
+        self.selected_speed = tk.StringVar(value="Normal")
+
+        # Map instant keys to their target browser key actions
+        self.instant_key_map = {
+            'n': 'n',
+            't': 't',
+            'w': 'w',
+            'j': 'left',   # Seek backward
+            'l': 'right',  # Seek forward
+            'k': 'space'   # Play / Pause
+        }
+
+        self.setup_ui()
+        self.setup_global_hotkeys()
+
+    # ==========================================
+    # UI Setup
+    # ==========================================
+    def setup_ui(self):
+        tk.Label(self.root, text="Hudl Interactive Tagger Pro", font=("Segoe UI", 12, "bold")).pack(pady=(10, 2))
         
-        self.status = tk.Label(root, text="Instant: N, T, W | X to Exit | Numbers + Enter", fg="blue")
-        self.status.pack(pady=5)
+        shortcut_text = "Press Shift+Space anywhere to focus tagger" if KEYBOARD_AVAILABLE else "Install 'keyboard' package for global hotkey"
+        tk.Label(self.root, text=shortcut_text, font=("Segoe UI", 8), fg="#666").pack()
+
+        self.status = tk.Label(self.root, text="Instant: N, T, W | Playback: J (◀), K (⏸/▶), L (▶) | X: Exit", fg="blue", wraplength=440)
+        self.status.pack(pady=6)
+
+        self.entry = tk.Entry(self.root, font=("Consolas", 14), width=15, justify="center")
+        self.entry.pack(pady=6)
         
-        self.entry = tk.Entry(root, font=("Consolas", 14), width=15, justify="center")
-        self.entry.pack(pady=10)
-        
-        # Bind Enter for numbers, and KeyRelease for instant letters
-        self.entry.bind("<Return>", lambda e: self.run_complex_sequence())
+        # Key bindings
+        self.entry.bind("<Return>", lambda e: self.trigger_complex_sequence())
         self.entry.bind("<KeyRelease>", self.check_instant_keys)
+        self.entry.bind("<Up>", self.recall_previous_tag)
         self.entry.focus_set()
+
+        # Speed Selector Frame
+        speed_frame = tk.Frame(self.root)
+        speed_frame.pack(pady=4)
+        tk.Label(speed_frame, text="Speed: ", font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        for mode in ["Fast", "Normal", "Safe"]:
+            tk.Radiobutton(speed_frame, text=mode, variable=self.selected_speed, value=mode).pack(side=tk.LEFT, padx=4)
+
+        # Coordinate button & history label
+        tk.Button(self.root, text="Set Target Box", width=22, command=self.calibrate_target).pack(pady=6)
         
-        tk.Button(root, text="1. Set Target Box", width=20, command=self.calibrate_target).pack(pady=5)
-        
+        self.coord_label = tk.Label(self.root, text=f"Target: {self.target_coord}", font=("Consolas", 9), fg="#555")
+        self.coord_label.pack()
+
+        self.history_label = tk.Label(self.root, text="Recent: None", font=("Segoe UI", 8), fg="#777")
+        self.history_label.pack(pady=4)
+
+    # ==========================================
+    # Global Hotkey (Shift + Space)
+    # ==========================================
+    def setup_global_hotkeys(self):
+        if KEYBOARD_AVAILABLE:
+            def on_hotkey():
+                self.root.after(0, self._refocus_app)
+            keyboard.add_hotkey("shift+space", on_hotkey)
+
+    # ==========================================
+    # Config File Management
+    # ==========================================
+    def load_config(self):
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r") as f:
+                    data = json.load(f)
+                    return tuple(data.get("target_coord", (1698, 391)))
+            except Exception:
+                pass
+        return (1698, 391)
+
+    def save_config(self):
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({"target_coord": self.target_coord}, f)
+
+    # ==========================================
+    # History & Recall
+    # ==========================================
+    def recall_previous_tag(self, event):
+        if self.history:
+            self.entry.delete(0, tk.END)
+            self.entry.insert(0, self.history[-1])
+        return "break"
+
+    def _get_safe_empty_coord(self):
+        target_x, target_y = self.target_coord
+        if target_y + 300 < self.screen_height - 50:
+            return target_x, target_y + 300
+        return target_x, max(50, target_y - 200)
+
     # ==========================================
     # Calibration Overlay
     # ==========================================
     def calibrate_target(self):
-        self.overlay = tk.Toplevel(self.root)
-        self.overlay.attributes("-fullscreen", True, "-alpha", 0.3, "-topmost", True)
-        self.overlay.configure(bg="black")
-        self.overlay.config(cursor="crosshair")
+        overlay = tk.Toplevel(self.root)
+        overlay.attributes("-fullscreen", True, "-alpha", 0.3, "-topmost", True)
+        overlay.configure(bg="black", cursor="crosshair")
         
-        self.canvas = tk.Canvas(self.overlay, bg="black", highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        
-        self.canvas.create_text(
+        canvas = tk.Canvas(overlay, bg="black", highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        canvas.create_text(
             50, 50, anchor="nw", fill="#00ff66", font=("Segoe UI", 16, "bold"), 
             text="Click the 'Select...' Players box. (Esc to cancel)"
         )
         
-        self.overlay.bind("<ButtonPress-1>", self.on_overlay_click)
-        self.overlay.bind("<Escape>", lambda e: self.overlay.destroy())
+        def on_click(event):
+            self.target_coord = (event.x_root, event.y_root)
+            self.save_config()
+            overlay.destroy()
+            
+            coord_str = f"{self.target_coord[0]}, {self.target_coord[1]}"
+            self.coord_label.config(text=f"Target: {self.target_coord}")
+            self.status.config(text=f"Target Saved: ({coord_str})", fg="#007700")
+            
+            self.root.clipboard_clear()
+            self.root.clipboard_append(coord_str)
+            self._refocus_app()
 
-    def on_overlay_click(self, event):
-        self.target_coord = (event.x_root, event.y_root)
-        self.overlay.destroy()
-        
-        # Format the coordinates
-        coord_text = f"{self.target_coord[0]}, {self.target_coord[1]}"
-        
-        # Print the coordinates directly to the terminal
-        print(f"Calibrated Target Coordinates: ({coord_text})")
-        
-        # Update UI to show the coordinates
-        self.status.config(text=f"Target Set: ({coord_text})\n(Copied to clipboard!)", fg="#007700")
-        
-        # Automatically copy them to the Windows clipboard
-        self.root.clipboard_clear()
-        self.root.clipboard_append(coord_text)
-        
-        self._refocus_app()
+        overlay.bind("<ButtonPress-1>", on_click)
+        overlay.bind("<Escape>", lambda e: overlay.destroy())
 
     # ==========================================
-    # Instant Key Logic (No Enter Required)
+    # Instant Key & Navigation Controls
     # ==========================================
     def check_instant_keys(self, event):
+        if self.is_running:
+            return
+
         raw_input = self.entry.get().strip().lower()
-        
-        # 1. Check for the Exit command first
         if raw_input == 'x':
             self.entry.delete(0, tk.END)
             self.root.destroy()
             return
             
-        # 2. If the input is exactly one of our instant command letters
-        if raw_input in ['n', 't', 'w']:
-            # Clear the box immediately so it doesn't wait for Enter
+        if raw_input in self.instant_key_map:
+            target_key = self.instant_key_map[raw_input]
+            display_name = raw_input.upper()
             self.entry.delete(0, tk.END)
-            self.run_instant_command(raw_input)
+            threading.Thread(target=self.run_instant_command, args=(target_key, display_name), daemon=True).start()
 
-    def run_instant_command(self, key):
-        self.status.config(text=f"Quick command. Pressed '{key.upper()}'.", fg="black")
-        self.root.update()
+    def run_instant_command(self, key_to_press, display_name):
+        self.is_running = True
+        self.status.config(text=f"Sent: [{display_name}] -> {key_to_press}", fg="black")
         
-        target_x, target_y = self.target_coord
-        empty_y = target_y + 300
+        target_x, empty_y = self._get_safe_empty_coord()
+        key_pause, _ = self.speed_profiles[self.selected_speed.get()]
         
-        # Click empty space to focus browser, then press the key
-        pyautogui.click(target_x, empty_y)
-        time.sleep(0.1)
-        pyautogui.press(key)
-        
-        self._refocus_app()
+        try:
+            # Click empty space on browser canvas to ensure video focus
+            pyautogui.click(target_x, empty_y)
+            time.sleep(key_pause)
+            pyautogui.press(key_to_press)
+        finally:
+            self.is_running = False
+            self.root.after(0, self._refocus_app)
 
     # ==========================================
     # Complex Number Sequence (Requires Enter)
     # ==========================================
-    def run_complex_sequence(self):
-        raw_input = self.entry.get().strip()
+    def trigger_complex_sequence(self):
+        if self.is_running:
+            return
         
+        raw_input = self.entry.get().strip()
         if not raw_input:
             return
             
-        target_x, target_y = self.target_coord
-        empty_y = target_y + 300
+        players = raw_input.split()[:3]
         
-        players = raw_input.split()
-        if len(players) > 3:
-            players = players[:3]
-            
-        self.status.config(text=f"Tagging players: {', '.join(players)}...", fg="black")
-        self.root.update()
+        joined_str = " ".join(players)
+        if not self.history or self.history[-1] != joined_str:
+            self.history.append(joined_str)
+            if len(self.history) > 5:
+                self.history.pop(0)
+            self.history_label.config(text=f"Recent: {', '.join(self.history)}")
+
+        self.entry.delete(0, tk.END)
+        threading.Thread(target=self.run_complex_sequence, args=(players,), daemon=True).start()
+
+    def run_complex_sequence(self, players):
+        self.is_running = True
+        self.status.config(text=f"Tagging: {', '.join(players)}...", fg="black")
+        
+        target_x, target_y = self.target_coord
+        _, empty_y = self._get_safe_empty_coord()
+        key_pause, step_delay = self.speed_profiles[self.selected_speed.get()]
         
         try:
-            # 1. Click empty space to ensure Hudl is focused
+            # 1. Focus Hudl
             pyautogui.click(target_x, empty_y)
-            time.sleep(0.15)
+            time.sleep(key_pause)
             
-            # 2. Press 'y' to confirm the block
+            # 2. Confirm block
             pyautogui.press('y')
-            time.sleep(0.5) 
+            time.sleep(step_delay) 
             
-            # 3. Click the target box
+            # 3. Target box
             pyautogui.click(target_x, target_y)
-            time.sleep(0.3)
+            time.sleep(step_delay * 0.7)
             
-            # 4. Insert numbers and press Tab
+            # 4. Write players
             for player_num in players:
                 pyautogui.write(player_num)
-                time.sleep(0.15)
+                time.sleep(key_pause)
                 pyautogui.press('tab')
-                time.sleep(0.15)
+                time.sleep(key_pause)
                 
-            # 5. Click 300px down
+            # 5. Defocus & Save
             pyautogui.click(target_x, empty_y)
-            time.sleep(0.3)
-            
-            # 6. Save with 'e'
+            time.sleep(key_pause)
             pyautogui.press('e')
             
-            self.status.config(text=f"Successfully tagged: {', '.join(players)}", fg="#007700")
+            self.status.config(text=f"Tagged: {', '.join(players)}", fg="#007700")
             
         except pyautogui.FailSafeException:
-            messagebox.showwarning("FailSafe", "Mouse hit the screen corner. Adjust your target coordinates.")
-            self.status.config(text="Execution aborted.", fg="red")
-            
+            self.root.after(0, lambda: messagebox.showwarning("FailSafe", "Mouse reached corner."))
+            self.status.config(text="Aborted.", fg="red")
         finally:
-            self._refocus_app()
+            self.is_running = False
+            self.root.after(0, self._refocus_app)
 
-    # ==========================================
-    # Focus Management
-    # ==========================================
     def _refocus_app(self):
         self.entry.delete(0, tk.END)
-        self.root.after(100, lambda: self.root.focus_force())
-        self.root.after(150, lambda: self.entry.focus_set())
+        self.root.lift()
+        self.root.focus_force()
+        self.entry.focus_set()
 
 if __name__ == "__main__":
     root = tk.Tk()
