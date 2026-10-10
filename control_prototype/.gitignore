@@ -1,4 +1,0 @@
-# Per-computer screen coordinates must remain local
-coordinates.json
-__pycache__/
-*.py[cod]
