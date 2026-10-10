@@ -38,11 +38,27 @@
     "taggers": {
         "block": {
             "player_select_box": [
-                1692,
-                418
+                1690,
+                391
             ],
             "confirm_key": "y",
             "save_key": "e"
         }
+    },
+    "jersey_tagger": {
+        "video_roi": {
+            "top": 261,
+            "left": 35,
+            "width": 1581,
+            "height": 650
+        },
+        "jersey_coords": [
+            1701,
+            530
+        ],
+        "extra_coords": [
+            1769,
+            494
+        ]
     }
 }

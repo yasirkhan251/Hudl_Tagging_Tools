@@ -291,7 +291,7 @@ class InteractiveHudlTagger:
                 if not self.menu_is_open:
                     pyautogui.click(menu_btn[0], menu_btn[1])
                     self.menu_is_open = True
-                    time.sleep(0.18)
+                    time.sleep(0.38)
 
                 # 3. Click directly on the target speed
                 pyautogui.click(speed_coord[0], speed_coord[1])
