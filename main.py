@@ -73,6 +73,17 @@ TOOLS = {
         "accent": "#ea580c",
         "icon": "04",
     },
+    "clicker": {
+        "name": "Auto Mouse & Keyboard Clicker",
+        "subtitle": "F6 Mouse / F7 Keyboard / F8 Sequence",
+        "description": (
+            "Repeat mouse clicks, keyboard keys or click-plus-key sequences. "
+            "Cursor color indicates the active mode; Esc stops all automation."
+        ),
+        "script": "auto_clicker.py",
+        "accent": "#db2777",
+        "icon": "05",
+    },
 }
 
 
@@ -90,8 +101,8 @@ class HudlDashboard:
 
     def _configure_window(self):
         self.root.title(APP_TITLE)
-        self.root.geometry("940x720")
-        self.root.minsize(820, 650)
+        self.root.geometry("1040x850")
+        self.root.minsize(860, 700)
         self.root.configure(bg="#0b1120")
 
         try:
@@ -185,12 +196,14 @@ class HudlDashboard:
             ("block", 0, 1),
             ("attack2d", 1, 0),
             ("attack3d", 1, 1),
+            ("clicker", 2, 0),
         ]
 
         grid.columnconfigure(0, weight=1)
         grid.columnconfigure(1, weight=1)
         grid.rowconfigure(0, weight=1)
         grid.rowconfigure(1, weight=1)
+        grid.rowconfigure(2, weight=1)
 
         for key, row, column in cards:
             self._create_tool_card(grid, key, row, column)
