@@ -354,6 +354,25 @@ class HudlDashboard:
         tool["state_label"] = state_label
         tool["button"] = button
 
+        # Make the entire card surface clickable, not just the button.
+        self._bind_card_surface(outer, key)
+
+    def _bind_card_surface(self, widget: tk.Widget, key: str):
+        """Bind card frames and labels to the same launch action."""
+        if not isinstance(widget, tk.Button):
+            try:
+                widget.configure(cursor="hand2")
+            except tk.TclError:
+                pass
+            widget.bind(
+                "<Button-1>",
+                lambda event, tool_key=key: self.launch_tool(tool_key),
+                add="+",
+            )
+
+        for child in widget.winfo_children():
+            self._bind_card_surface(child, key)
+
     def launch_tool(self, key: str):
         tool = TOOLS[key]
 
@@ -398,10 +417,6 @@ class HudlDashboard:
 
         existing = self.processes.get(key)
         if existing is not None and existing.poll() is None:
-            try:
-                existing.terminate()
-            except Exception:
-                pass
             self.status_var.set(f"{tool['name']} is already running")
             return
 
