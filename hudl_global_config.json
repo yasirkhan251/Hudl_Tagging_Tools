@@ -2,44 +2,44 @@
     "shared_ui": {
         "speed_menu": {
             "menu_btn": [
-                1570,
-                899
+                3059,
+                1791
             ],
             "0.5": [
-                1481,
-                764
+                2876,
+                1530
             ],
             "1.0": [
-                1515,
-                764
+                2939,
+                1529
             ],
             "1.5": [
-                1544,
-                764
+                2999,
+                1530
             ],
             "2.0": [
-                1575,
-                763
+                3069,
+                1531
             ],
             "2.5": [
-                1608,
-                764
+                3132,
+                1531
             ],
             "menu_exit": [
-                1786,
-                804
+                3439,
+                1583
             ]
         },
         "video_neutral_click": [
-            1200,
-            600
+            2640,
+            195
         ]
     },
     "taggers": {
         "block": {
             "player_select_box": [
-                1690,
-                391
+                3328,
+                775
             ],
             "confirm_key": "y",
             "save_key": "e"
@@ -47,27 +47,27 @@
     },
     "jersey_tagger": {
         "video_roi": {
-            "top": 261,
-            "left": 35,
-            "width": 1581,
-            "height": 650
+            "top": 417,
+            "left": 3219,
+            "width": 400,
+            "height": 349
         },
         "jersey_coords": [
-            1701,
-            530
+            3324,
+            1053
         ],
         "extra_coords": [
-            1769,
-            494
+            3454,
+            987
         ]
     },
     "attack_2d": {
         "focus_area": {
-            "left": 564,
-            "top": 180,
-            "right": 726,
-            "bottom": 563,
-            "middle": 371
+            "left": 3333,
+            "top": 739,
+            "right": 3535,
+            "bottom": 1086,
+            "middle": 912
         }
     }
 }

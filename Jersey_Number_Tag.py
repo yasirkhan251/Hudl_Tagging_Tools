@@ -1,5 +1,5 @@
 """
-Hudl Hybrid Auto-Tagger Pro (Fast Launch Edition)
+Hudl Hybrid Auto-Tagger Pro (Fast Launch Edition - Optimized)
 Lazy-loads PyTorch, YOLO, EasyOCR, and Vosk to ensure < 0.5s GUI launch time.
 """
 
@@ -29,6 +29,25 @@ MANUAL_AUTO_SUBMIT_DELAY_MS = 600
 SPEED_LEVELS = [0.5, 1.0, 1.5, 2.0, 2.5]
 DEFAULT_SPEED_INDEX = 1  # 1.0x
 
+DEFAULT_CONFIG = {
+    "shared_ui": {
+        "speed_menu": {},
+        "video_neutral_click": [1200, 600]
+    },
+    "taggers": {
+        "block": {
+            "player_select_box": [1691, 392],
+            "confirm_key": "y",
+            "save_key": "e"
+        }
+    },
+    "jersey_tagger": {
+        "jersey_coords": None,
+        "extra_coords": None,
+        "video_roi": None
+    }
+}
+
 
 # ============================================================
 # CONFIGURATION HELPERS
@@ -41,24 +60,8 @@ def load_global_config():
                 return json.load(f)
         except Exception as e:
             print(f"[Config] Error loading config: {e}")
-    return {
-        "shared_ui": {
-            "speed_menu": {},
-            "video_neutral_click": [1200, 600]
-        },
-        "taggers": {
-            "block": {
-                "player_select_box": [1691, 392],
-                "confirm_key": "y",
-                "save_key": "e"
-            }
-        },
-        "jersey_tagger": {
-            "jersey_coords": None,
-            "extra_coords": None,
-            "video_roi": None
-        }
-    }
+    return DEFAULT_CONFIG.copy()
+
 
 def save_global_config(config_data):
     try:
@@ -91,14 +94,13 @@ WORD_TO_NUM = {
 
 TENS = {20, 30, 40, 50, 60, 70, 80, 90}
 
+
 def parse_spoken_number(text):
     text = text.lower().strip()
     digit = re.search(r"\b(\d{1,2})\b", text)
     if digit:
         value = int(digit.group(1))
-        if 0 <= value <= 99:
-            return str(value)
-        return None
+        return str(value) if 0 <= value <= 99 else None
 
     words = re.findall(r"[a-z]+", text)
     nums = [WORD_TO_NUM[w] for w in words if w in WORD_TO_NUM]
@@ -112,9 +114,7 @@ def parse_spoken_number(text):
                 return str(val)
 
     value = nums[-1] if (len(nums) > 1 and nums[-1] in range(1, 20)) else nums[0]
-    if 1 <= value <= 99:
-        return str(value)
-    return None
+    return str(value) if 1 <= value <= 99 else None
 
 
 # ============================================================
@@ -171,9 +171,8 @@ class CalibrationOverlay:
             return
 
         if self.step == 2:
-            second_coords = coords
             self.window.destroy()
-            self.callback(self.first_coords, second_coords)
+            self.callback(self.first_coords, coords)
 
     def on_roi_start(self, event):
         self.start_x = event.x_root
@@ -223,7 +222,7 @@ class AutoTaggerApp:
         # Load shared configuration
         self.config_data = load_global_config()
         jersey_cfg = self.config_data.get("jersey_tagger", {})
-        
+
         self.jersey_coords = tuple(jersey_cfg["jersey_coords"]) if jersey_cfg.get("jersey_coords") else None
         self.extra_coords = tuple(jersey_cfg["extra_coords"]) if jersey_cfg.get("extra_coords") else None
         self.video_roi = jersey_cfg.get("video_roi")
@@ -234,7 +233,6 @@ class AutoTaggerApp:
         self.cooldown_until = 0
         self.voice_listening_active = False
         self.speech_tag_active = False
-        self.voice_thread = None
 
         self.manual_mode = "auto"
         self.manual_submit_job = None
@@ -246,7 +244,6 @@ class AutoTaggerApp:
         self.audio_queue = queue.Queue(maxsize=100)
 
         self._build_ui()
-
         self.root.bind_all("<KeyPress>", self._global_key_handler, add="+")
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -260,8 +257,8 @@ class AutoTaggerApp:
         btn_frame = tk.Frame(self.root)
         btn_frame.pack(fill="x", padx=14, pady=5)
 
-        tk.Button(btn_frame, text="1. Set Targets", width=12, command=self.calibrate_targets).pack(side="left", padx=(0, 4))
-        tk.Button(btn_frame, text="2. Set Video ROI", width=13, command=self.calibrate_roi).pack(side="left", padx=(0, 4))
+        tk.Button(btn_frame, text="1. Set Targets (Q)", width=14, command=self.calibrate_targets).pack(side="left", padx=(0, 4))
+        tk.Button(btn_frame, text="2. Set Video ROI (V)", width=15, command=self.calibrate_roi).pack(side="left", padx=(0, 4))
 
         self.manual_mode_btn = tk.Button(
             btn_frame, text="M: Auto Submit", width=13, bg="#008000", fg="white", command=self.toggle_manual_mode
@@ -273,8 +270,8 @@ class AutoTaggerApp:
 
         tk.Label(
             self.root,
-            text="Nav: J (◀) | L (▶) | K (⏸/▶) | Speed: O (Down), P (Up) | Q: Exit\n"
-                 "Hotkeys: B = Voice Toggle | C = Scan Toggle | X = Targets | V = ROI | M = Mode",
+            text="Nav: A (◀ 5s) | D (▶ 5s) | S (⏸/▶) | R (T) | Speed: O (Down), P (Up)\n"
+                 "Hotkeys: Q = Targets | V = ROI | B = Voice | C = Auto Scan | X = Exit | M = Mode",
             font=("Segoe UI", 8, "bold"),
             fg="#444",
             justify="left"
@@ -335,7 +332,6 @@ class AutoTaggerApp:
         self.entry.focus_set()
 
     def open_block_tagger(self):
-        # Lazy import so blocksystem doesn't slow down initial script startup
         from blocksystem import InteractiveHudlTagger
         block_window = tk.Toplevel(self.root)
         InteractiveHudlTagger(block_window)
@@ -349,7 +345,7 @@ class AutoTaggerApp:
         if jersey_coords and extra_coords:
             self.jersey_coords = jersey_coords
             self.extra_coords = extra_coords
-            
+
             self.config_data.setdefault("jersey_tagger", {})["jersey_coords"] = list(jersey_coords)
             self.config_data.setdefault("jersey_tagger", {})["extra_coords"] = list(extra_coords)
             save_global_config(self.config_data)
@@ -403,6 +399,9 @@ class AutoTaggerApp:
 
             menu_btn = self.speed_coords.get("menu_btn")
             speed_coord = self.speed_coords.get(speed_str)
+            if not menu_btn or not speed_coord:
+                self.root.after(0, lambda: self.status.config(text=f"Missing coords for {speed_str}x", fg="#b30000"))
+                return
 
             try:
                 if not self.menu_is_open:
@@ -411,10 +410,10 @@ class AutoTaggerApp:
                     time.sleep(0.38)
 
                 pyautogui.click(speed_coord[0], speed_coord[1])
-                self.status.config(text=f"Speed: {speed_str}x (Menu open)", fg="#007700")
+                self.root.after(0, lambda: self.status.config(text=f"Speed: {speed_str}x (Menu open)", fg="#007700"))
                 self.root.after(0, self.restore_focus)
             except Exception as e:
-                self.status.config(text=f"Speed error: {str(e)}", fg="#b30000")
+                self.root.after(0, lambda: self.status.config(text=f"Speed error: {str(e)}", fg="#b30000"))
 
             self.close_timer = threading.Timer(3.0, self._close_speed_menu)
             self.close_timer.daemon = True
@@ -433,7 +432,9 @@ class AutoTaggerApp:
                     pass
 
             self.menu_is_open = False
-            self.status.config(text=f"Speed: {SPEED_LEVELS[self.current_speed_idx]}x. Menu closed.", fg="#0066cc")
+            self.root.after(0, lambda: self.status.config(
+                text=f"Speed: {SPEED_LEVELS[self.current_speed_idx]}x. Menu closed.", fg="#0066cc"
+            ))
             self.root.after(0, self.restore_focus)
 
     # ========================================================
@@ -441,7 +442,7 @@ class AutoTaggerApp:
     # ========================================================
     def send_hudl_key(self, key):
         key = key.lower()
-        action_map = {"j": "left", "l": "right", "k": "space"}
+        action_map = {"a": "left", "d": "right", "s": "space", "r": "t"}
         output_key = action_map.get(key, key)
 
         if self.extra_coords:
@@ -461,6 +462,7 @@ class AutoTaggerApp:
                 "left": "LEFT ARROW (5s back)",
                 "right": "RIGHT ARROW (5s forward)",
                 "space": "SPACE (play/pause)",
+                "t": "T (scrub)",
             }
             display = display_names.get(output_key, output_key.upper())
             self.status.config(text=f"Sent {display} to Hudl.", fg="#007700")
@@ -472,81 +474,51 @@ class AutoTaggerApp:
     def _validate_manual_input(self, proposed):
         if proposed == "":
             return True
-        if not re.fullmatch(r"\d{1,2}", proposed):
-            return False
-        return 0 <= int(proposed) <= 99
+        return bool(re.fullmatch(r"\d{1,2}", proposed) and 0 <= int(proposed) <= 99)
+
+    def _execute_command_hotkey(self, key):
+        """Unified command hotkey runner to prevent double execution."""
+        actions = {
+            "x": self.close,
+            "m": self.toggle_manual_mode,
+            "q": self.calibrate_targets,
+            "v": self.calibrate_roi,
+            "b": self.toggle_speech_tag,
+            "c": self.toggle_scanning,
+            "o": lambda: self.trigger_speed_change("down"),
+            "p": lambda: self.trigger_speed_change("up"),
+        }
+        if key in actions:
+            actions[key]()
+            return True
+        if key in {"a", "d", "s", "r"}:
+            self.send_hudl_key(key)
+            return True
+        return False
 
     def _global_key_handler(self, event):
-        key = event.keysym.lower()
+        # If the Entry box currently has focus, let its specific handler process digits/keys
+        if self.root.focus_get() == self.entry:
+            return None
 
-        if key == "q":
-            self.close()
-            return "break"
-        if key == "m":
-            self.toggle_manual_mode()
-            return "break"
-        if key == "x":
-            self.calibrate_targets()
-            return "break"
-        if key == "v":
-            self.calibrate_roi()
-            return "break"
-        if key == "b":
-            self.toggle_speech_tag()
-            return "break"
-        if key == "c":
-            self.toggle_scanning()
-            return "break"
-        if key == "o":
-            self.trigger_speed_change("down")
-            return "break"
-        if key == "p":
-            self.trigger_speed_change("up")
-            return "break"
-        if key in {"j", "l", "k"}:
-            self.send_hudl_key(key)
+        key = event.keysym.lower()
+        if self._execute_command_hotkey(key):
             return "break"
         if len(key) == 1 and key.isalpha():
             self.send_hudl_key(key)
             return "break"
+        return None
 
     def _manual_key_pressed(self, event):
         key = event.keysym.lower()
-
-        if key == "q":
-            self.close()
-            return "break"
-        if key == "m":
-            self.toggle_manual_mode()
-            return "break"
-        if key == "x":
-            self.calibrate_targets()
-            return "break"
-        if key == "v":
-            self.calibrate_roi()
-            return "break"
-        if key == "b":
-            self.toggle_speech_tag()
-            return "break"
-        if key == "c":
-            self.toggle_scanning()
-            return "break"
-        if key == "o":
-            self.trigger_speed_change("down")
-            return "break"
-        if key == "p":
-            self.trigger_speed_change("up")
-            return "break"
-        if key in {"j", "l", "k"}:
-            self.send_hudl_key(key)
-            return "break"
-        if len(key) == 1 and key.isalpha():
-            self.send_hudl_key(key)
+        if self._execute_command_hotkey(key):
             return "break"
 
+        # Allowed entry navigation keys
         if event.keysym in {"BackSpace", "Delete", "Left", "Right", "Home", "End", "Return", "KP_Enter", "Tab"}:
             return None
 
+        # Block any non-digit input into the jersey field
         if event.keysym not in "0123456789":
             return "break"
 
@@ -637,7 +609,7 @@ class AutoTaggerApp:
             return
 
         if not self.jersey_coords or not self.extra_coords:
-            messagebox.showwarning("Missing Targets", "Click '1. Set Targets' first.")
+            messagebox.showwarning("Missing Targets", "Click '1. Set Targets (Q)' first.")
             return
 
         self.speech_tag_active = True
@@ -648,7 +620,6 @@ class AutoTaggerApp:
     def _start_speech_tag_worker(self):
         try:
             if self.vosk_model is None:
-                # Lazy import Vosk
                 from vosk import Model
                 if not MODEL_PATH.is_dir():
                     raise FileNotFoundError(f"Vosk model folder not found: {MODEL_PATH}")
@@ -683,7 +654,6 @@ class AutoTaggerApp:
 
     def _init_and_run_worker(self):
         try:
-            # Lazy imports for heavy vision frameworks
             if self.yolo_model is None:
                 from ultralytics import YOLO
                 self.yolo_model = YOLO("yolov8n.pt")
@@ -696,6 +666,7 @@ class AutoTaggerApp:
                     raise FileNotFoundError(f"Vosk folder missing: {MODEL_PATH}")
                 self.vosk_model = Model(str(MODEL_PATH))
         except Exception as exc:
+            self.is_scanning = False
             self.root.after(0, lambda e=str(exc): self.status.config(text=f"Startup error: {e}", fg="#b30000"))
             return
 
@@ -706,9 +677,11 @@ class AutoTaggerApp:
         import cv2
         import numpy as np
 
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
         try:
             with mss.mss() as sct:
-                while self.is_scanning or self.speech_tag_active:
+                while self.is_scanning:
                     if self.detection_paused or time.time() < self.cooldown_until:
                         time.sleep(0.1)
                         continue
@@ -719,24 +692,28 @@ class AutoTaggerApp:
 
                     found = False
                     for result in results:
-                        if result.boxes is None:
+                        if result.boxes is None or len(result.boxes) == 0:
                             continue
                         for box in result.boxes.xyxy.cpu().numpy():
                             x1, y1, x2, y2 = map(int, box)
                             h = y2 - y1
-                            crop = frame[max(0, y1 + int(h * 0.10)): min(frame.shape[0], y1 + int(h * 0.70)), max(0, x1): min(frame.shape[1], x2)]
+
+                            crop = frame[
+                                max(0, y1 + int(h * 0.10)): min(frame.shape[0], y1 + int(h * 0.70)),
+                                max(0, x1): min(frame.shape[1], x2)
+                            ]
                             if crop.size == 0 or crop.shape[0] < 20 or crop.shape[1] < 20:
                                 continue
 
                             gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
                             gray = cv2.resize(gray, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-                            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
                             gray = clahe.apply(gray)
                             gray = cv2.copyMakeBorder(gray, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=[255, 255, 255])
 
-                            for (bbox, text, prob) in self.ocr_reader.readtext(
+                            detections = self.ocr_reader.readtext(
                                 gray, allowlist="0123456789", mag_ratio=2.0, text_threshold=0.5, low_text=0.3
-                            ):
+                            )
+                            for (_, text, prob) in detections:
                                 clean = text.strip()
                                 if re.fullmatch(r"\d{1,2}", clean) and 0 <= int(clean) <= 99 and prob > 0.35:
                                     self.detection_paused = True
@@ -755,8 +732,7 @@ class AutoTaggerApp:
         if not (self.is_scanning or self.speech_tag_active) or self.voice_listening_active:
             return
         self.voice_listening_active = True
-        self.voice_thread = threading.Thread(target=self._listen_for_voice, daemon=True)
-        self.voice_thread.start()
+        threading.Thread(target=self._listen_for_voice, daemon=True).start()
 
     def _listen_for_voice(self):
         tag_started = False
@@ -774,6 +750,7 @@ class AutoTaggerApp:
                 except queue.Full:
                     pass
 
+            # Flush old data
             while not self.audio_queue.empty():
                 try:
                     self.audio_queue.get_nowait()

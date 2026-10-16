@@ -242,7 +242,7 @@ class AttackLocation2DApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Attack 2D Tagger")
-        self.root.geometry("390x440+40+80")
+        self.root.geometry("390x650+40+80")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#181a20")
