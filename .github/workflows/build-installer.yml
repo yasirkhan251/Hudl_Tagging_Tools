@@ -1,0 +1,33 @@
+name: Build Windows Setup EXE
+
+on:
+  push:
+    paths:
+      - "installer/bootstrap.py"
+      - ".github/workflows/build-installer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pyinstaller
+      - name: Build setup executable
+        run: pyinstaller --onefile --console --name HudlTaggingToolsSetup installer/bootstrap.py
+      - name: Upload setup.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: HudlTaggingToolsSetup-Windows
+          path: dist/HudlTaggingToolsSetup.exe
+          if-no-files-found: error
+          retention-days: 30
