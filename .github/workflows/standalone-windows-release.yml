@@ -38,6 +38,8 @@ jobs:
           Copy-Item rtdetr-l.pt package\ -ErrorAction SilentlyContinue
       - name: Build dashboard executable
         run: pyinstaller --noconfirm --clean --onefile --windowed --name HudlTaggingTools main.py
+      - name: Build update launcher
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name HudlTaggingToolsLauncher installer/launcher.py
       - name: Build jersey tagger executable
         run: pyinstaller --noconfirm --clean --onefile --windowed --name Jersey_Number_Tag --add-data "vosk;vosk" --hidden-import sounddevice --collect-all sounddevice Jersey_Number_Tag.py
       - name: Build block tagger executable
@@ -50,6 +52,37 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item dist\HudlTaggingTools.exe package\
+          Copy-Item dist\HudlTaggingToolsLauncher.exe package\
+          if ($env:GITHUB_REF_NAME -match '^v?\d+\.\d+\.\d+
+          Copy-Item dist\Jersey_Number_Tag.exe package\tools\
+          Copy-Item dist\blocksystem.exe package\tools\
+          Copy-Item dist\attack_location_2d_iteration.exe package\tools\
+          Copy-Item dist\attack_location_3d.exe package\tools\
+          Copy-Item vosk package\vosk -Recurse -Force
+          if (!(Test-Path package\hudl_global_config.json)) { '{}' | Set-Content package\hudl_global_config.json }
+          if (!(Test-Path package\coordinates.json)) { '{}' | Set-Content package\coordinates.json }
+          if (!(Test-Path package\yolov8n.pt)) { throw "yolov8n.pt is missing from repository." }
+      - name: Compile Windows installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\HudlTaggingToolsStandalone.iss
+          if (!(Test-Path dist\HudlTaggingToolsSetup.exe)) { throw "Installer was not produced." }
+      - name: Upload setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HudlTaggingToolsSetup-Windows
+          path: dist/HudlTaggingToolsSetup.exe
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub Release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hudl Tagging Tools Release
+          generate_release_notes: true
+          files: dist/HudlTaggingToolsSetup.exe
+) { $version = $env:GITHUB_REF_NAME.TrimStart('v') } else { $version = '1.0.1' }
+          Set-Content -Path package\version.txt -Value $version -NoNewline
           Copy-Item dist\Jersey_Number_Tag.exe package\tools\
           Copy-Item dist\blocksystem.exe package\tools\
           Copy-Item dist\attack_location_2d_iteration.exe package\tools\
