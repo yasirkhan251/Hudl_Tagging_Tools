@@ -50,8 +50,6 @@ jobs:
         run: pyinstaller --noconfirm --clean --onefile --windowed --name attack_location_2d_iteration attack_location_2d_iteration.py
       - name: Build 3D attack tool executable
         run: pyinstaller --noconfirm --clean --onefile --windowed --name attack_location_3d attack_location_3d.py
-      - name: Build Auto Mouse and Keyboard Clicker executable
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name auto_clicker auto_clicker.py
       - name: Assemble installed application
         shell: pwsh
         run: |
@@ -63,7 +61,6 @@ jobs:
           Copy-Item dist\blocksystem.exe package\tools\
           Copy-Item dist\attack_location_2d_iteration.exe package\tools\
           Copy-Item dist\attack_location_3d.exe package\tools\
-          Copy-Item dist\auto_clicker.exe package\tools\
           Copy-Item vosk package\vosk -Recurse -Force
           if (!(Test-Path package\hudl_global_config.json)) { '{}' | Set-Content package\hudl_global_config.json }
           if (!(Test-Path package\coordinates.json)) { '{}' | Set-Content package\coordinates.json }
