@@ -30,8 +30,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "..\package\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Hudl Tagging Tools"; Filename: "{app}\HudlTaggingTools.exe"; WorkingDir: "{app}"
+Name: "{group}\Hudl Tagging Tools"; Filename: "{app}\HudlTaggingToolsLauncher.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\Hudl Tagging Tools"; Filename: "{app}\HudlTaggingTools.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\HudlTaggingTools.exe"; Description: "Launch Hudl Tagging Tools"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\HudlTaggingToolsLauncher.exe"; Description: "Launch Hudl Tagging Tools"; Flags: postinstall nowait skipifsilent
