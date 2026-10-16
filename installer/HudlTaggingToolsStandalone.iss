@@ -31,7 +31,7 @@ Source: "..\package\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cr
 
 [Icons]
 Name: "{group}\Hudl Tagging Tools"; Filename: "{app}\HudlTaggingToolsLauncher.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\Hudl Tagging Tools"; Filename: "{app}\HudlTaggingTools.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\Hudl Tagging Tools"; Filename: "{app}\HudlTaggingToolsLauncher.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\HudlTaggingToolsLauncher.exe"; Description: "Launch Hudl Tagging Tools"; Flags: postinstall nowait skipifsilent
