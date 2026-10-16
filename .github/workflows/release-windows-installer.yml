@@ -26,6 +26,6 @@ jobs:
       - name: Publish setup.exe as a GitHub Release asset
         uses: softprops/action-gh-release@v2
         with:
-          name: Hudl Tagging Tools \${{ github.ref_name }}
+          name: Hudl Tagging Tools ${{ github.ref_name }}
           generate_release_notes: true
           files: dist/HudlTaggingToolsSetup.exe
