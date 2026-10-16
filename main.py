@@ -26,7 +26,7 @@ from tkinter import messagebox
 APP_TITLE = "Hudl Tagging Tools"
 APP_SUBTITLE = "Volleyball automation & sports tagging dashboard"
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 
 TOOLS = {
     "jersey": {
@@ -335,7 +335,13 @@ class HudlDashboard:
 
     def launch_tool(self, key: str):
         tool = TOOLS[key]
-        script_path = BASE_DIR / tool["script"]
+        if getattr(sys, "frozen", False):
+            # Packaged Windows build: each tool is its own executable.
+            script_path = BASE_DIR / "tools" / (Path(tool["script"]).stem + ".exe")
+            launch_command = [str(script_path)]
+        else:
+            script_path = BASE_DIR / tool["script"]
+            launch_command = [sys.executable, str(script_path)]
 
         if not script_path.exists():
             self.status_var.set(f"Missing: {tool['script']}")
@@ -357,7 +363,7 @@ class HudlDashboard:
 
         try:
             process = subprocess.Popen(
-                [sys.executable, str(script_path)],
+                launch_command,
                 cwd=str(BASE_DIR),
             )
             self.processes[key] = process
