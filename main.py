@@ -27,6 +27,9 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
 
+import keyboard
+import pyautogui
+
 
 APP_TITLE = "Hudl Tagging Tools"
 APP_SUBTITLE = "Volleyball automation & sports tagging dashboard"
