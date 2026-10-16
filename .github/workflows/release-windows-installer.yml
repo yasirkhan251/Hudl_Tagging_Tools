@@ -1,0 +1,31 @@
+name: Publish Windows Setup Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pyinstaller
+      - name: Build the small online installer
+        run: pyinstaller --onefile --console --name HudlTaggingToolsSetup installer/bootstrap.py
+      - name: Publish setup.exe as a GitHub Release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Hudl Tagging Tools \${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/HudlTaggingToolsSetup.exe
